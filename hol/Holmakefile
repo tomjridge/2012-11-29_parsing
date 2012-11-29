@@ -1,0 +1,4 @@
+all: parsingTheory.sig parsingTheory.sml parsingTheory.ui parsingTheory.uo
+
+parsingTheory.sig parsingTheory.sml: parsingScript.sml
+	$(HOLDIR)/bin/hol < $<

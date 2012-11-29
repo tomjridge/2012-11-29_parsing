@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" baseProfile="full" id="body" width="8in" height="8in" viewBox="0 0 1 1" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:ev="http://www.w3.org/2001/xml-events">
+<title>SVG drawing</title>
+<desc>This was produced by version 4.4 of GNU libplot, a free library for exporting 2-D vector graphics.</desc>
+<rect id="background" x="0" y="0" width="1" height="1" stroke="none" fill="white"/>
+<g id="content" transform="translate(0,1) scale(1,-1) scale(0.00024414) " xml:space="preserve" stroke="black" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="10.433" stroke-dasharray="none" stroke-dashoffset="0" stroke-opacity="1" fill="none" fill-rule="evenodd" fill-opacity="1" font-style="normal" font-variant="normal" font-weight="normal" font-stretch="normal" font-size-adjust="none" letter-spacing="normal" word-spacing="normal" text-anchor="start">
+<text transform="translate(1302.2,3365.9) scale(1,-1) scale(3.6864) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >Grammar=brackets2.g  Dataset=brackets2.ds</text>
+<rect x="819.2" y="819.2" width="2457.6" height="2457.6" stroke-width="4.8188" />
+<text transform="translate(783.33,662.21) scale(1,-1) scale(6.4512) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >0</text>
+<line x1="819.2" y1="3276.8" x2="819.2" y2="3227.6" stroke-width="4.8188" />
+<line x1="819.2" y1="819.2" x2="819.2" y2="868.35" stroke-width="4.8188" />
+<text transform="translate(1397.7,662.21) scale(1,-1) scale(6.4512) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >5</text>
+<line x1="1433.6" y1="3276.8" x2="1433.6" y2="3227.6" stroke-width="4.8188" />
+<line x1="1433.6" y1="819.2" x2="1433.6" y2="868.35" stroke-width="4.8188" />
+<text transform="translate(1976.3,662.21) scale(1,-1) scale(6.4512) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >10</text>
+<line x1="2048" y1="3276.8" x2="2048" y2="3227.6" stroke-width="4.8188" />
+<line x1="2048" y1="819.2" x2="2048" y2="868.35" stroke-width="4.8188" />
+<text transform="translate(2590.7,662.21) scale(1,-1) scale(6.4512) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >15</text>
+<line x1="2662.4" y1="3276.8" x2="2662.4" y2="3227.6" stroke-width="4.8188" />
+<line x1="2662.4" y1="819.2" x2="2662.4" y2="868.35" stroke-width="4.8188" />
+<text transform="translate(3205.1,662.21) scale(1,-1) scale(6.4512) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >20</text>
+<line x1="3276.8" y1="3276.8" x2="3276.8" y2="3227.6" stroke-width="4.8188" />
+<line x1="3276.8" y1="819.2" x2="3276.8" y2="868.35" stroke-width="4.8188" />
+<line x1="819.2" y1="3276.8" x2="819.2" y2="3257.1" stroke-width="4.8188" />
+<line x1="819.2" y1="819.2" x2="819.2" y2="838.86" stroke-width="4.8188" />
+<line x1="942.08" y1="3276.8" x2="942.08" y2="3257.1" stroke-width="4.8188" />
+<line x1="942.08" y1="819.2" x2="942.08" y2="838.86" stroke-width="4.8188" />
+<line x1="1065" y1="3276.8" x2="1065" y2="3257.1" stroke-width="4.8188" />
+<line x1="1065" y1="819.2" x2="1065" y2="838.86" stroke-width="4.8188" />
+<line x1="1187.8" y1="3276.8" x2="1187.8" y2="3257.1" stroke-width="4.8188" />
+<line x1="1187.8" y1="819.2" x2="1187.8" y2="838.86" stroke-width="4.8188" />
+<line x1="1310.7" y1="3276.8" x2="1310.7" y2="3257.1" stroke-width="4.8188" />
+<line x1="1310.7" y1="819.2" x2="1310.7" y2="838.86" stroke-width="4.8188" />
+<line x1="1433.6" y1="3276.8" x2="1433.6" y2="3257.1" stroke-width="4.8188" />
+<line x1="1433.6" y1="819.2" x2="1433.6" y2="838.86" stroke-width="4.8188" />
+<line x1="1556.5" y1="3276.8" x2="1556.5" y2="3257.1" stroke-width="4.8188" />
+<line x1="1556.5" y1="819.2" x2="1556.5" y2="838.86" stroke-width="4.8188" />
+<line x1="1679.4" y1="3276.8" x2="1679.4" y2="3257.1" stroke-width="4.8188" />
+<line x1="1679.4" y1="819.2" x2="1679.4" y2="838.86" stroke-width="4.8188" />
+<line x1="1802.2" y1="3276.8" x2="1802.2" y2="3257.1" stroke-width="4.8188" />
+<line x1="1802.2" y1="819.2" x2="1802.2" y2="838.86" stroke-width="4.8188" />
+<line x1="1925.1" y1="3276.8" x2="1925.1" y2="3257.1" stroke-width="4.8188" />
+<line x1="1925.1" y1="819.2" x2="1925.1" y2="838.86" stroke-width="4.8188" />
+<line x1="2048" y1="3276.8" x2="2048" y2="3257.1" stroke-width="4.8188" />
+<line x1="2048" y1="819.2" x2="2048" y2="838.86" stroke-width="4.8188" />
+<line x1="2170.9" y1="3276.8" x2="2170.9" y2="3257.1" stroke-width="4.8188" />
+<line x1="2170.9" y1="819.2" x2="2170.9" y2="838.86" stroke-width="4.8188" />
+<line x1="2293.8" y1="3276.8" x2="2293.8" y2="3257.1" stroke-width="4.8188" />
+<line x1="2293.8" y1="819.2" x2="2293.8" y2="838.86" stroke-width="4.8188" />
+<line x1="2416.6" y1="3276.8" x2="2416.6" y2="3257.1" stroke-width="4.8188" />
+<line x1="2416.6" y1="819.2" x2="2416.6" y2="838.86" stroke-width="4.8188" />
+<line x1="2539.5" y1="3276.8" x2="2539.5" y2="3257.1" stroke-width="4.8188" />
+<line x1="2539.5" y1="819.2" x2="2539.5" y2="838.86" stroke-width="4.8188" />
+<line x1="2662.4" y1="3276.8" x2="2662.4" y2="3257.1" stroke-width="4.8188" />
+<line x1="2662.4" y1="819.2" x2="2662.4" y2="838.86" stroke-width="4.8188" />
+<line x1="2785.3" y1="3276.8" x2="2785.3" y2="3257.1" stroke-width="4.8188" />
+<line x1="2785.3" y1="819.2" x2="2785.3" y2="838.86" stroke-width="4.8188" />
+<line x1="2908.2" y1="3276.8" x2="2908.2" y2="3257.1" stroke-width="4.8188" />
+<line x1="2908.2" y1="819.2" x2="2908.2" y2="838.86" stroke-width="4.8188" />
+<line x1="3031" y1="3276.8" x2="3031" y2="3257.1" stroke-width="4.8188" />
+<line x1="3031" y1="819.2" x2="3031" y2="838.86" stroke-width="4.8188" />
+<line x1="3153.9" y1="3276.8" x2="3153.9" y2="3257.1" stroke-width="4.8188" />
+<line x1="3153.9" y1="819.2" x2="3153.9" y2="838.86" stroke-width="4.8188" />
+<line x1="3276.8" y1="3276.8" x2="3276.8" y2="3257.1" stroke-width="4.8188" />
+<line x1="3276.8" y1="819.2" x2="3276.8" y2="838.86" stroke-width="4.8188" />
+<text transform="translate(602.99,773.65) scale(1,-1) scale(6.4512) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >0.0</text>
+<line x1="3276.8" y1="819.2" x2="3227.6" y2="819.2" stroke-width="4.8188" />
+<line x1="819.2" y1="819.2" x2="868.35" y2="819.2" stroke-width="4.8188" />
+<text transform="translate(602.99,1124.7) scale(1,-1) scale(6.4512) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >0.1</text>
+<line x1="3276.8" y1="1170.3" x2="3227.6" y2="1170.3" stroke-width="4.8188" />
+<line x1="819.2" y1="1170.3" x2="868.35" y2="1170.3" stroke-width="4.8188" />
+<text transform="translate(602.99,1475.8) scale(1,-1) scale(6.4512) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >0.2</text>
+<line x1="3276.8" y1="1521.4" x2="3227.6" y2="1521.4" stroke-width="4.8188" />
+<line x1="819.2" y1="1521.4" x2="868.35" y2="1521.4" stroke-width="4.8188" />
+<text transform="translate(602.99,1826.9) scale(1,-1) scale(6.4512) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >0.3</text>
+<line x1="3276.8" y1="1872.5" x2="3227.6" y2="1872.5" stroke-width="4.8188" />
+<line x1="819.2" y1="1872.5" x2="868.35" y2="1872.5" stroke-width="4.8188" />
+<text transform="translate(602.99,2178) scale(1,-1) scale(6.4512) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >0.4</text>
+<line x1="3276.8" y1="2223.5" x2="3227.6" y2="2223.5" stroke-width="4.8188" />
+<line x1="819.2" y1="2223.5" x2="868.35" y2="2223.5" stroke-width="4.8188" />
+<text transform="translate(602.99,2529.1) scale(1,-1) scale(6.4512) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >0.5</text>
+<line x1="3276.8" y1="2574.6" x2="3227.6" y2="2574.6" stroke-width="4.8188" />
+<line x1="819.2" y1="2574.6" x2="868.35" y2="2574.6" stroke-width="4.8188" />
+<text transform="translate(602.99,2880.2) scale(1,-1) scale(6.4512) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >0.6</text>
+<line x1="3276.8" y1="2925.7" x2="3227.6" y2="2925.7" stroke-width="4.8188" />
+<line x1="819.2" y1="2925.7" x2="868.35" y2="2925.7" stroke-width="4.8188" />
+<text transform="translate(602.99,3231.3) scale(1,-1) scale(6.4512) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >0.7</text>
+<line x1="3276.8" y1="3276.8" x2="3227.6" y2="3276.8" stroke-width="4.8188" />
+<line x1="819.2" y1="3276.8" x2="868.35" y2="3276.8" stroke-width="4.8188" />
+<line x1="3276.8" y1="819.2" x2="3257.1" y2="819.2" stroke-width="4.8188" />
+<line x1="819.2" y1="819.2" x2="838.86" y2="819.2" stroke-width="4.8188" />
+<line x1="3276.8" y1="994.74" x2="3257.1" y2="994.74" stroke-width="4.8188" />
+<line x1="819.2" y1="994.74" x2="838.86" y2="994.74" stroke-width="4.8188" />
+<line x1="3276.8" y1="1170.3" x2="3257.1" y2="1170.3" stroke-width="4.8188" />
+<line x1="819.2" y1="1170.3" x2="838.86" y2="1170.3" stroke-width="4.8188" />
+<line x1="3276.8" y1="1345.8" x2="3257.1" y2="1345.8" stroke-width="4.8188" />
+<line x1="819.2" y1="1345.8" x2="838.86" y2="1345.8" stroke-width="4.8188" />
+<line x1="3276.8" y1="1521.4" x2="3257.1" y2="1521.4" stroke-width="4.8188" />
+<line x1="819.2" y1="1521.4" x2="838.86" y2="1521.4" stroke-width="4.8188" />
+<line x1="3276.8" y1="1696.9" x2="3257.1" y2="1696.9" stroke-width="4.8188" />
+<line x1="819.2" y1="1696.9" x2="838.86" y2="1696.9" stroke-width="4.8188" />
+<line x1="3276.8" y1="1872.5" x2="3257.1" y2="1872.5" stroke-width="4.8188" />
+<line x1="819.2" y1="1872.5" x2="838.86" y2="1872.5" stroke-width="4.8188" />
+<line x1="3276.8" y1="2048" x2="3257.1" y2="2048" stroke-width="4.8188" />
+<line x1="819.2" y1="2048" x2="838.86" y2="2048" stroke-width="4.8188" />
+<line x1="3276.8" y1="2223.5" x2="3257.1" y2="2223.5" stroke-width="4.8188" />
+<line x1="819.2" y1="2223.5" x2="838.86" y2="2223.5" stroke-width="4.8188" />
+<line x1="3276.8" y1="2399.1" x2="3257.1" y2="2399.1" stroke-width="4.8188" />
+<line x1="819.2" y1="2399.1" x2="838.86" y2="2399.1" stroke-width="4.8188" />
+<line x1="3276.8" y1="2574.6" x2="3257.1" y2="2574.6" stroke-width="4.8188" />
+<line x1="819.2" y1="2574.6" x2="838.86" y2="2574.6" stroke-width="4.8188" />
+<line x1="3276.8" y1="2750.2" x2="3257.1" y2="2750.2" stroke-width="4.8188" />
+<line x1="819.2" y1="2750.2" x2="838.86" y2="2750.2" stroke-width="4.8188" />
+<line x1="3276.8" y1="2925.7" x2="3257.1" y2="2925.7" stroke-width="4.8188" />
+<line x1="819.2" y1="2925.7" x2="838.86" y2="2925.7" stroke-width="4.8188" />
+<line x1="3276.8" y1="3101.3" x2="3257.1" y2="3101.3" stroke-width="4.8188" />
+<line x1="819.2" y1="3101.3" x2="838.86" y2="3101.3" stroke-width="4.8188" />
+<line x1="3276.8" y1="3276.8" x2="3257.1" y2="3276.8" stroke-width="4.8188" />
+<line x1="819.2" y1="3276.8" x2="838.86" y2="3276.8" stroke-width="4.8188" />
+<text transform="translate(1214.4,501.24) scale(1,-1) scale(6.4512) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >Relative input size (20 ~ 40k)</text>
+<text transform="matrix(0 6.4512 6.4512 0 511.58 1854.5) " font-family="Helvetica,sans-serif" font-size="20px" stroke="none" fill="black" >Time/s</text>
+<polyline points="942.08,889.42 1065,994.74 1310.7,1170.3 1802.2,1661.8 2048,1837.3 3276.8,2995.9 " stroke-width="4.8188" />
+<polyline points="942.08,889.42 1065,924.53 1310.7,994.74 1802.2,1170.3 2048,1240.5 3276.8,1696.9 " stroke-width="4.8188" stroke-dasharray="4.8188, 14.456"/>
+</g>
+</svg>

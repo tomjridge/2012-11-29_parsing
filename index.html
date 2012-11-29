@@ -1,0 +1,25 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+</head>
+<body>
+<h1 id="simple-functional-sound-and-complete-parsing-for-all-context-free-grammars">Simple, functional, sound and complete parsing for all context-free grammars</h1>
+<p>This is a collection of resources to accompany the paper submission to CPP2011. A big thanks to Max Bolingbroke for everything related to Haskell and Happy.</p>
+<ul>
+<li><p>The paper is <a href="http://www.tom-ridge.com/doc/ridge11parsing-cpp.pdf">here</a>.</p></li>
+<li><p><a href="doc/parsing.html">doc/parsing.html</a> - documentation for the OCaml code</p></li>
+<li><p><a href="src/README.html">src/README.html</a> - OCaml code for the parser</p></li>
+<li><p><a href="examples">examples</a> - example grammars and inputs</p></li>
+<li><p><a href="hol">hol</a> - the HOL4 proof script</p></li>
+<li><p>A bundle of all the files (including the Happy test harness) is <a href="../parsing.tar.gz">here</a></p></li>
+</ul>
+<h2 id="quick-start">Quick start</h2>
+<p>With OCaml installed, compile <code>src/main.ml</code>, and test it on an example grammar.</p>
+<pre><code>ocamlopt -o a.out src/main.ml
+./a.out -g examples/E_EEE/E_EEE5.g -f examples/E_EEE/10.txt</code></pre>
+</body>
+</html>

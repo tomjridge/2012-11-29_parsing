@@ -1,0 +1,364 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; }
+code > span.dt { color: #902000; }
+code > span.dv { color: #40a070; }
+code > span.bn { color: #40a070; }
+code > span.fl { color: #40a070; }
+code > span.ch { color: #4070a0; }
+code > span.st { color: #4070a0; }
+code > span.co { color: #60a0b0; font-style: italic; }
+code > span.ot { color: #007020; }
+code > span.al { color: #ff0000; font-weight: bold; }
+code > span.fu { color: #06287e; }
+code > span.er { color: #ff0000; font-weight: bold; }
+  </style>
+</head>
+<body>
+<div id="TOC">
+<ul>
+<li><a href="#gtrans---grammar-transformation">GTrans - grammar transformation</a><ul>
+<li><a href="#libraries">Libraries</a></li>
+<li><a href="#types">Types</a></li>
+<li><a href="#fsm-to-regexp">FSM to regexp</a></li>
+<li><a href="#basic-functions">Basic functions</a></li>
+</ul></li>
+<li><a href="#converting-a-grammar1-to-a-min_fsm">Converting a grammar1 to a min_fsm</a></li>
+</ul>
+</div>
+<h1 id="gtrans---grammar-transformation"><a href="#TOC">GTrans - grammar transformation</a></h1>
+<p>We transform any context free grammar to an equivalent form, which prunes some parse trees.</p>
+<p>One of the optimizations is to split <code>E</code> into <code>E+</code> and <code>E-</code>, where <code>E- -&gt; eps</code> if E caneps. This avoids repeated unfolding of a parse tree which eventually parses eps.</p>
+<p>The other optimization is that each <code>E+</code> rule starts with a non-eps terminal, and references only other <code>F+</code> nonterms. Actually, does this second bit really matter? Probably not, see negligble performance difference between <code>E_EEE5.g</code> and <code>E_EEE6.g</code>. The point is to have something in the plus that cannot eps.</p>
+<pre><code>E -&gt; E E E</code></pre>
+<p>becomes</p>
+<pre><code>E+ -&gt; E+ E E | E- E E</code></pre>
+<p>The other thing is to consider whether the plus really contributes - <code>E_EEE7.g</code> clearly is much slower, as is <code>E_EEE8.g</code>. Rather than a top-down parse, we are moving towards a while parse, and this may be making everything quicker.</p>
+<p>The general structure of this development is:</p>
+<ul>
+<li><p><code>min_elim</code> - eliminate a <code>min_fsm</code> to a <code>minre</code></p></li>
+<li><p><code>min_fsm_of_grammar1</code> - convert a <code>grammar1</code> to a <code>min_fsm</code></p></li>
+</ul>
+<p>First we introduce our types for terminals and nonterminals.</p>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+<span class="co">(* FIXME instead of the following, open TagTMNT *)</span>
+
+<span class="kw">type</span> term = <span class="dt">string</span>
+<span class="kw">type</span> tag = <span class="dt">None1</span> | <span class="dt">Plus1</span> | <span class="dt">Minus1</span>
+<span class="kw">type</span> nonterm = <span class="dt">string</span> * tag
+
+<span class="kw">let</span> string_of_tag t = (<span class="kw">match</span> t <span class="kw">with</span> 
+  | <span class="dt">None1</span> -&gt; <span class="st">&quot;0&quot;</span>
+  | <span class="dt">Plus1</span> -&gt; <span class="st">&quot;+&quot;</span>
+  | <span class="dt">Minus1</span> -&gt; <span class="st">&quot;-&quot;</span>)
+
+<span class="kw">let</span> string_of_nt (s,t) = s^<span class="st">&quot;(&quot;</span>^(string_of_tag t)^<span class="st">&quot;)&quot;</span>
+
+<span class="kw">let</span> string_of_tm tm = tm
+
+<span class="co">(*</span>
+<span class="co">let mk_Plus1 sym = (match sym with </span>
+<span class="co">  | NT(nt,t) -&gt; (NT(nt,Plus1))</span>
+<span class="co">  | _ -&gt; sym)</span>
+<span class="co">*)</span></code></pre>
+<h2 id="libraries"><a href="#TOC">Libraries</a></h2>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml"> <span class="ot">#cd &quot;/tmp/l/general/research/parsing/src&quot;;;</span>
+ <span class="ot">#use &quot;hol_light_lib.ml&quot;;;</span>
+ <span class="ot">#use &quot;fmap.ml&quot;;;</span>
+ <span class="ot">#use &quot;graph.ml&quot;;;</span>
+
+<span class="co">(* #use &quot;corenotermnonterm.ml&quot;;; *)</span>
+
+<span class="ot">open</span> TagTMNT;;
+<span class="ot">open</span> TagCore;;
+
+<span class="kw">let</span> break p xs = 
+  <span class="kw">let</span> <span class="kw">rec</span> b p xs ys = <span class="kw">match</span> ys <span class="kw">with</span> [] -&gt; (xs,ys)
+    | y::ys -&gt; <span class="kw">if</span> p y <span class="kw">then</span> b p (xs@[y]) ys <span class="kw">else</span> (xs,y::ys)
+  <span class="kw">in</span>
+  b p [] xs
+
+<span class="kw">let</span> is_Some x = (<span class="kw">match</span> x <span class="kw">with</span> <span class="dt">Some</span> _ -&gt; <span class="kw">true</span> | _ -&gt; <span class="kw">false</span>)
+</code></pre>
+<h2 id="types"><a href="#TOC">Types</a></h2>
+<p>Some basic types associated with <code>min_fsm</code>.</p>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+<span class="co">(* this type is the minimal type for our particular version of elimination *)</span>
+<span class="kw">type</span> &#39;a minre = <span class="dt">ATOM2</span> <span class="kw">of</span> &#39;a | <span class="dt">SEQPLUS2</span> <span class="kw">of</span> &#39;a minre * &#39;a minre <span class="dt">list</span> <span class="dt">option</span> * &#39;a minre
+
+<span class="co">(* &#39;a linre list is a canonical form of the above *)</span>
+<span class="kw">type</span> &#39;a linre = <span class="dt">ATOM3</span> <span class="kw">of</span> &#39;a | <span class="dt">PLUS3</span> <span class="kw">of</span> (&#39;a linre <span class="dt">list</span>) <span class="dt">list</span>
+
+<span class="kw">type</span> min_edge = { src5: symbol; dst5: symbol; lbl5: symbol <span class="dt">list</span> minre }
+
+<span class="kw">type</span> min_fsm = (symbol,min_edge) graph1</code></pre>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">type</span> edge1 = { src3:symbol; dst3:symbol; lbl3: symbol <span class="dt">list</span> }
+</code></pre>
+<p>A simple form of grammar, but no less expressive.</p>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">type</span> rhs1 = rhs
+
+<span class="kw">type</span> parse_rule1 = parse_rule
+
+<span class="kw">type</span> grammar1 = parse_rule1 <span class="dt">list</span></code></pre>
+<p>A more complex form of grammar; a grammar in this form can be transformed to a simple grammar.</p>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+<span class="kw">type</span> rhs3 = symbol minre
+
+<span class="kw">type</span> parse_rule3 = nonterm * symbol <span class="dt">list</span> minre
+
+<span class="kw">type</span> grammar3 = parse_rule3 <span class="dt">list</span>
+
+</code></pre>
+<h2 id="fsm-to-regexp"><a href="#TOC">FSM to regexp</a></h2>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+<span class="co">(* for the proof, we wish to show that any plus expression notcaneps;</span>
+<span class="co">   this is true initially; new pluses can be added from self-edges; so</span>
+<span class="co">   we need that any self-edge notcaneps; new self-edges arise from</span>
+<span class="co">   eliminating a node v, with edges from u to v and v to u; when we</span>
+<span class="co">   eliminate such nodes v, we need to ensure that we don&#39;t make a</span>
+<span class="co">   self-edge that caneps, but we still cover all the possibilities; in</span>
+<span class="co">   the definition of min_caneps, we can assume that any plus expressions</span>
+<span class="co">   notcaneps; we therefore need to consider the other possibilities;</span>
+
+<span class="co">   if plus is none, and from and to are [], then we don&#39;t add a</span>
+<span class="co">   self-edge</span>
+
+<span class="co">   otherwise, plus is some, and we do; there is the possibility that we</span>
+<span class="co">   have plus as an empty list; so we also need to ensure this is ruled</span>
+<span class="co">   out (which is really an invariant on the datatype, not our alg - we</span>
+<span class="co">   should use the type of non-empty lists)</span>
+
+<span class="co">   another point about min_caneps: if we have the invariant on plus,</span>
+<span class="co">   then the only way it caneps is if all the from and to atom2s caneps</span>
+<span class="co">*)</span>
+<span class="kw">let</span> <span class="kw">rec</span> min_caneps re = (<span class="kw">match</span> re <span class="kw">with</span>
+  | <span class="dt">ATOM2</span> xs -&gt; (xs = []) <span class="co">(* assumes non-empty symbol lists cannot eps *)</span>
+  | <span class="dt">SEQPLUS2</span>(from,plus,_to) -&gt; (<span class="kw">match</span> plus <span class="kw">with</span> 
+      | <span class="dt">None</span> -&gt; (min_caneps from &amp;&amp; min_caneps _to)
+      | <span class="dt">Some</span> xs -&gt; (min_caneps from &amp;&amp; (forall min_caneps xs) &amp;&amp; min_caneps _to)))
+
+<span class="co">(* the following is equivalent to the above, given the invariant on plus expressions *)</span>
+<span class="kw">let</span> <span class="kw">rec</span> min_caneps2 re = (<span class="kw">match</span> re <span class="kw">with</span>
+  | <span class="dt">ATOM2</span> xs -&gt; (xs = []) <span class="co">(* assumes non-empty symbol lists cannot eps *)</span>
+  | <span class="dt">SEQPLUS2</span>(from,plus,_to) -&gt; (<span class="kw">match</span> plus <span class="kw">with</span> 
+      | <span class="dt">None</span> -&gt; (min_caneps2 from &amp;&amp; min_caneps2 _to)
+      | <span class="dt">Some</span> xs -&gt; <span class="kw">false</span>)) <span class="co">(* invariant on plus expressions *)</span>
+
+<span class="kw">let</span> mingraph0 = {
+   vs1=[];
+   es1=[];
+   src1=(<span class="kw">fun</span> x -&gt; x.src5);
+   dst1=(<span class="kw">fun</span> x -&gt; x.dst5);
+}
+
+<span class="co">(* another version, with minre, min_fsm *)</span>
+<span class="kw">let</span> min_elim g avoids =
+  <span class="kw">let</span> f1 v g0 = ( <span class="co">(* for each vertex *)</span>
+    <span class="kw">if</span> mem v avoids <span class="kw">then</span> g0 <span class="kw">else</span>
+      <span class="kw">let</span> ses = self_edges g0 v <span class="kw">in</span>
+      <span class="kw">let</span> ines = subtract (edges_to g0 v) ses <span class="kw">in</span>
+      <span class="kw">let</span> outes = subtract (edges_from g0 v) ses <span class="kw">in</span>
+      <span class="kw">let</span> f2 ine g = <span class="co">(* for each in edge, which is not a self-edge *)</span>
+        <span class="kw">let</span> f3 oute g = <span class="co">(* for each out edge, which is not a self-edge *)</span>
+          <span class="co">(* first deal with self-edges *)</span>
+          <span class="kw">let</span> plus = (<span class="kw">match</span> ses <span class="kw">with</span> 
+            | [] -&gt; <span class="dt">None</span> <span class="co">(* invariant: never a SEQPLUS2(..,Some([]),..) *)</span>
+            | _ -&gt; <span class="dt">Some</span>(List<span class="kw">.</span>map (<span class="kw">fun</span> se -&gt; se.lbl5) ses))
+          <span class="kw">in</span>
+          <span class="co">(* update g with edge from ine.src4 to oute.dst5 *)</span>
+          <span class="co">(* handle no looping case first *)</span>
+          <span class="kw">let</span> lbl = (<span class="dt">SEQPLUS2</span>(ine.lbl5,<span class="dt">None</span>,oute.lbl5)) <span class="kw">in</span>
+          <span class="kw">let</span> newe = { src5=ine.src5; dst5=oute.dst5; lbl5=lbl } <span class="kw">in</span>
+          <span class="kw">let</span> g = (<span class="kw">match</span> (ine.src5=oute.dst5) &amp;&amp; min_caneps2 lbl <span class="kw">with</span> 
+            | <span class="kw">true</span> -&gt; g <span class="co">(* don&#39;t add self-edge with caneps lbl *)</span>
+            | <span class="kw">false</span> -&gt; { g <span class="kw">with</span> es1=insert newe g.es1 })
+          <span class="kw">in</span>
+          <span class="co">(* now deal with looping *)</span>
+          <span class="kw">let</span> lbl = (<span class="dt">SEQPLUS2</span>(ine.lbl5,plus,oute.lbl5)) <span class="kw">in</span>
+          <span class="kw">let</span> newe = { src5=ine.src5; dst5=oute.dst5; lbl5=lbl } <span class="kw">in</span>
+          <span class="kw">let</span> g = (<span class="kw">match</span> plus <span class="kw">with</span> 
+            | <span class="dt">None</span> -&gt; g <span class="co">(* no need to add any plus re - we&#39;ve already done it *)</span>
+            | <span class="dt">Some</span> xs -&gt; { g <span class="kw">with</span> es1=insert newe g.es1 })
+          <span class="kw">in</span>
+          g
+        <span class="kw">in</span>
+        itlist f3 outes g
+      <span class="kw">in</span>
+      <span class="kw">let</span> g&#39; = itlist f2 ines g0 <span class="kw">in</span>
+      { g&#39; <span class="kw">with</span> vs1=(subtract g&#39;.vs1 [v]); es1=(subtract g&#39;.es1 (ses@ines@outes)) })
+  <span class="kw">in</span>
+  itlist f1 g.vs1 g
+
+<span class="kw">let</span> (_:min_fsm -&gt; &#39;a <span class="dt">list</span> -&gt; min_fsm) = min_elim</code></pre>
+<h2 id="basic-functions"><a href="#TOC">Basic functions</a></h2>
+<p>Compute whether a given symbol can parse the empty string.</p>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+<span class="kw">let</span> caneps p_of_tm g sym = (
+  grammar_to_parser p_of_tm g sym (toinput (full <span class="st">&quot;&quot;</span>)) &lt;&gt; [])
+
+<span class="kw">let</span> alt_caneps p_of_tm g alt = forall (caneps p_of_tm g) alt
+
+<span class="kw">let</span> rhs3_caneps = min_caneps <span class="co">(* FIXME remove this defn *)</span></code></pre>
+<p>Compute symbols of a grammar.</p>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+<span class="kw">let</span> syms_of_grammar1 = syms_of_grammar
+
+<span class="kw">let</span> <span class="kw">rec</span> syms_of_rhs3 rhs = (<span class="kw">match</span> rhs <span class="kw">with</span>
+  | <span class="dt">ATOM2</span> syms -&gt; syms
+  | <span class="dt">SEQPLUS2</span>(from,z,_to) -&gt; (
+    <span class="kw">let</span> x = syms_of_rhs3 from <span class="kw">in</span>
+    <span class="kw">let</span> y = syms_of_rhs3 _to <span class="kw">in</span>
+    <span class="kw">let</span> z = (<span class="kw">match</span> z <span class="kw">with</span> | <span class="dt">None</span> -&gt; [] | <span class="dt">Some</span>(xs) -&gt; unions (List<span class="kw">.</span>map syms_of_rhs3 xs)) <span class="kw">in</span>
+    x@z@y))
+
+<span class="kw">let</span> syms_of_parse_rule3 (nt,rhs) = insert (<span class="dt">NT</span>(nt)) (syms_of_rhs3 rhs)
+
+<span class="kw">let</span> <span class="kw">rec</span> syms_of_grammar3 g = 
+  unions (List<span class="kw">.</span>map syms_of_parse_rule3 g)</code></pre>
+<p>Converting a grammar1 to a grammar2.</p>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">let</span> minre_of_alt1 alt = <span class="dt">ATOM2</span>(alt)
+
+<span class="co">(* the following takes a grammar with symbol list list rhs, and gives one with symbol list rhs *)</span>
+<span class="kw">let</span> single_of_grammar1 g1 = 
+  <span class="kw">let</span> rules_of_rhs1 (nt,alts) = List<span class="kw">.</span>map (<span class="kw">fun</span> alt -&gt; (nt,alt)) alts <span class="kw">in</span>
+  unions (List<span class="kw">.</span>map rules_of_rhs1 g1)
+
+<span class="kw">let</span> grammar3_of_grammar1 g1 =
+  List<span class="kw">.</span>map (<span class="kw">fun</span> (nt,alt) -&gt; (nt,minre_of_alt1 alt)) (single_of_grammar1 g1)
+
+<span class="kw">let</span> (_:grammar1 -&gt; grammar3) = grammar3_of_grammar1</code></pre>
+<h1 id="converting-a-grammar1-to-a-min_fsm"><a href="#TOC">Converting a grammar1 to a min_fsm</a></h1>
+<p>First we construct the graph that represents the connections between symbols.</p>
+<p>If there is a rule <code>E -&gt; N1 .. Nn F M1 Mm</code> and <code>N1 .. Nn caneps</code>, then any initially terminal rhs in <code>F</code> gets added to <code>E</code> (with <code>M1 .. Mm</code> suffix), so there is an edge from <code>F</code> to <code>E</code>, labelled <code>_ M1 .. Mm</code></p>
+<p>For every self-cycle <code>E -&gt; E</code>, if there is an initially terminal rhs <code>T N1 .. Nn</code>, we add <code>(T N1 .. Nn)+</code> as a rhs.</p>
+<p>For every cycle <code>E -(_1)-&gt; F .. G -(_n)-&gt; E</code>, and terminal rhs for <code>E</code>: <code>T N1 .. Nn</code>, we then add <code>(T N1 .. Nn)(_1_2.._n)*</code> to <code>E</code>.</p>
+<p>We start constructing the graph with the relevant edges. The nodes are the nonterminals. The edges are suffixes of an alternative (represented as an alternative).</p>
+<p>FIXME an invariant of <code>graph1_of_grammar</code> is that the edges are either empty, or initially terminal (begin e.g. with E+ etc)</p>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+<span class="kw">let</span> ($) f g x = f(g x)
+
+<span class="kw">let</span> graph1_of_grammar1 (caneps:symbol -&gt; <span class="dt">bool</span>) g = 
+  <span class="kw">let</span> vs = syms_of_grammar1 g <span class="kw">in</span>
+  <span class="kw">let</span> f1 sym = (<span class="kw">match</span> sym <span class="kw">with</span> 
+    | <span class="dt">TM</span>(tm) -&gt; []
+    | <span class="dt">NT</span>(nt) -&gt; (
+      <span class="kw">let</span> rules = List<span class="kw">.</span>filter (<span class="kw">fun</span> (nt&#39;,rhs) -&gt; nt&#39; = nt) g <span class="kw">in</span>
+      <span class="kw">let</span> alts1 = (List<span class="kw">.</span>concat $ (List<span class="kw">.</span>map snd)) rules <span class="kw">in</span>
+      <span class="co">(* for every alt, we add some edges FIXME we need to add in Plus1 etc and avoid self-edges with empty (but see below!) *)</span>
+      <span class="kw">let</span> <span class="kw">rec</span> f2 alt es = (<span class="kw">match</span> alt <span class="kw">with</span> 
+        | [] -&gt; es
+        | sym&#39;::alt&#39; -&gt; (
+          <span class="kw">let</span> es&#39; = insert { src3=sym&#39;; dst3=sym; lbl3=alt&#39; } es <span class="kw">in</span>
+          <span class="kw">if</span> caneps sym&#39; <span class="kw">then</span> f2 alt&#39; es&#39; <span class="kw">else</span> es&#39;))
+      <span class="kw">in</span>
+      itlist f2 alts1 []))
+  <span class="kw">in</span>
+  <span class="kw">let</span> es = unions (List<span class="kw">.</span>map f1 (vs)) <span class="kw">in</span>
+  <span class="co">(* filter out self-edges with empty labels *)</span>
+  <span class="kw">let</span> es = List<span class="kw">.</span>filter (<span class="kw">fun</span> e -&gt; e.src3&lt;&gt;e.dst3 || e.lbl3 &lt;&gt; []) es <span class="kw">in</span>
+  { vs1=vs; es1=es; src1=(<span class="kw">fun</span> x -&gt; x.src3); dst1=(<span class="kw">fun</span> x -&gt; x.dst3) }
+
+<span class="kw">let</span> (_:(symbol-&gt;bool) -&gt; grammar1 -&gt; (symbol,edge1)graph1) = graph1_of_grammar1
+
+
+<span class="kw">let</span> min_fsm_of_grammar1 caneps g =
+  <span class="kw">let</span> g1 = graph1_of_grammar1 caneps g <span class="kw">in</span>
+  <span class="kw">let</span> min_edge_of_edge1 e = { src5=e.src3; dst5=e.dst3; lbl5=(minre_of_alt1 e.lbl3) } <span class="kw">in</span>
+  { vs1=g1.vs1; es1=(List<span class="kw">.</span>map min_edge_of_edge1 g1.es1); src1=(<span class="kw">fun</span> e -&gt; e.src5); dst1=(<span class="kw">fun</span> e -&gt; e.dst5) }
+
+<span class="kw">let</span> (_:(symbol-&gt;bool) -&gt; grammar1 -&gt; min_fsm) = min_fsm_of_grammar1
+
+<span class="co">(* take a grammar1 and produce an equivalent grammar1 via elim; for each</span>
+<span class="co">   nonterminal, elim from terminals to the nonterminal, and that gives</span>
+<span class="co">   you a list of alternatives (a list of regexp), which can be mapped</span>
+<span class="co">   back to a list of alternatives *)</span>
+
+<span class="kw">let</span> regexps_of_symbol caneps g sym0 = 
+  <span class="kw">let</span> syms = syms_of_grammar g <span class="kw">in</span>
+  <span class="kw">let</span> tms = List<span class="kw">.</span>filter is_TM syms <span class="kw">in</span>
+  <span class="co">(* don&#39;t deal with eps here *)</span>
+  <span class="kw">let</span> tms = List<span class="kw">.</span>filter (<span class="kw">fun</span> x -&gt; x &lt;&gt; eps) tms <span class="kw">in</span>
+  <span class="kw">let</span> fsm = min_fsm_of_grammar1 caneps g <span class="kw">in</span>
+  <span class="co">(* add another distinguished node and edge *)</span>
+  <span class="kw">let</span> new_NT = <span class="dt">NT</span>(<span class="st">&quot;&quot;</span>,<span class="dt">None1</span>) <span class="kw">in</span>
+  <span class="co">(* note the SEQ1([]) in the following has to be removed later on *)</span>
+  <span class="kw">let</span> fsm = { fsm <span class="kw">with</span> vs1=(new_NT::fsm.vs1); es1=({ src5=sym0;dst5=new_NT;lbl5=ATOM2[] }::fsm.es1) } <span class="kw">in</span>
+  <span class="kw">let</span> re tmsym = 
+    <span class="kw">let</span> g = min_elim fsm [tmsym;new_NT] <span class="kw">in</span>
+    List<span class="kw">.</span>map (<span class="kw">fun</span> e -&gt; {e <span class="kw">with</span> dst5=sym0}) g.es1
+  <span class="kw">in</span>
+  <span class="kw">let</span> res = unions (List<span class="kw">.</span>map re tms) <span class="kw">in</span>
+  res
+
+<span class="kw">let</span> (_:(symbol -&gt; <span class="dt">bool</span>) -&gt; grammar1 -&gt; symbol -&gt; min_edge <span class="dt">list</span>) = regexps_of_symbol</code></pre>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+<span class="co">(* putting the whole thing together *)</span>
+<span class="kw">let</span> initially_terminal_grammar_of_grammar caneps g1 =
+  <span class="kw">let</span> syms = syms_of_grammar g1 <span class="kw">in</span>
+  <span class="kw">let</span> nts = List<span class="kw">.</span>filter is_NT syms <span class="kw">in</span>
+<span class="co">(*  let nts = List.map dest_NT nts in *)</span>
+  <span class="kw">let</span> f1 nt = 
+    <span class="co">(* for each nt *)</span>
+    <span class="kw">let</span> res = regexps_of_symbol caneps g1 nt <span class="kw">in</span>
+    <span class="co">(* below, e.src4 is the terminal; from a terminal &quot;1&quot; with lbl .., we make a lbl &quot;1&quot; .. *)</span>
+    <span class="kw">let</span> f2 e = { e <span class="kw">with</span> lbl5=SEQPLUS2(ATOM2[e<span class="kw">.</span>src5],<span class="dt">None</span>,e.lbl5) } <span class="kw">in</span>
+    <span class="kw">let</span> res = List<span class="kw">.</span>map f2 res <span class="kw">in</span>
+    <span class="kw">let</span> res = List<span class="kw">.</span>map (<span class="kw">fun</span> e -&gt; e.lbl5) res <span class="kw">in</span>
+    <span class="co">(* let rexys = List.map elim_STAR1s res in </span>
+<span class="co">    (* the following deals with the snd component of elim_STAR1s - the new nts represent a star of a re *)</span>
+<span class="co">    let f (nt,re) = (nt,ALT1[ATOM1(eps);SEQ1[re;ATOM1(NT(nt))]]) in</span>
+<span class="co">    let res = unions (List.map (fun (re,xys) -&gt; insert (nt,re) (List.map f xys)) rexys) in </span>
+<span class="co">    let rs = grammar1_of_grammar2 res in</span>
+<span class="co">    rs *)</span>
+    List<span class="kw">.</span>map (<span class="kw">fun</span> re -&gt; (nt,re)) res
+  <span class="kw">in</span>
+  <span class="kw">let</span> r = unions (List<span class="kw">.</span>map f1 nts) <span class="kw">in</span>
+  <span class="co">(* List.map (fun (nt,p) -&gt; (nt,[p])) r *)</span>
+  r
+
+<span class="kw">let</span> (_:(symbol -&gt; <span class="dt">bool</span>) -&gt; grammar1 -&gt; (symbol * symbol <span class="dt">list</span> minre)<span class="dt">list</span>) = initially_terminal_grammar_of_grammar
+
+<span class="co">(* optimize the minre by combining empty sequences etc; FIXME we may want to define a canonical form for these expressions *)</span>
+<span class="kw">let</span> <span class="kw">rec</span> optimize re = (<span class="kw">match</span> re <span class="kw">with</span>
+  | <span class="dt">ATOM2</span> _ -&gt; re
+  | <span class="dt">SEQPLUS2</span>(xs,ys,zs) -&gt; (
+    <span class="kw">match</span> (optimize xs,ys,optimize zs) <span class="kw">with</span> 
+      | ((<span class="dt">ATOM2</span> []),<span class="dt">None</span>,(<span class="dt">ATOM2</span> zs)) -&gt; (<span class="dt">ATOM2</span> zs)
+      | ((<span class="dt">ATOM2</span> xs),<span class="dt">None</span>,(<span class="dt">ATOM2</span> [])) -&gt; (<span class="dt">ATOM2</span> xs)
+      | (xs,<span class="dt">None</span>,ys) -&gt; <span class="dt">SEQPLUS2</span>(xs,<span class="dt">None</span>,ys)
+      | (xs,<span class="dt">Some</span> ys,zs) -&gt; <span class="dt">SEQPLUS2</span>(xs,<span class="dt">Some</span>(List<span class="kw">.</span>map optimize ys),zs)))
+
+<span class="kw">let</span> <span class="kw">rec</span> canonicalize re = (<span class="kw">match</span> re <span class="kw">with</span>
+  | <span class="dt">ATOM2</span> [] -&gt; []
+  | <span class="dt">ATOM2</span> xs -&gt; [<span class="dt">ATOM3</span> xs]
+  | <span class="dt">SEQPLUS2</span>(xs,<span class="dt">None</span>,zs) -&gt; ((canonicalize xs)@(canonicalize zs))
+  | <span class="dt">SEQPLUS2</span>(xs,<span class="dt">Some</span> ys,zs) -&gt; ((canonicalize xs)@[PLUS3 (List<span class="kw">.</span>map canonicalize ys)]@(canonicalize zs)))
+
+<span class="kw">let</span> (_:symbol <span class="dt">list</span> minre -&gt; symbol <span class="dt">list</span> linre <span class="dt">list</span>) = canonicalize
+
+<span class="co">(* FIXME remaining is to restrict to non-eps terminals, and deal with caneps separately *)</span>  
+
+<span class="kw">let</span> eps_rules_of_grammar caneps g =
+  <span class="kw">let</span> nts = List<span class="kw">.</span>filter is_NT (syms_of_grammar g) <span class="kw">in</span>
+  <span class="kw">let</span> f symnt = <span class="kw">if</span> caneps symnt <span class="kw">then</span> [(dest_NT symnt,[[eps]])] <span class="kw">else</span> [] <span class="kw">in</span>
+  List<span class="kw">.</span>concat (List<span class="kw">.</span>map f nts)
+
+<span class="kw">let</span> (_:(symbol -&gt; <span class="dt">bool</span>) -&gt; grammar1 -&gt; parse_rule1 <span class="dt">list</span>) = eps_rules_of_grammar
+
+<span class="co">(* now we need a version of the parser that is memoized but doesn&#39;t bother with context etc *)</span>
+</code></pre>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="co">(* final double-semi-colon, for using via ocaml &lt;xyz.ml *)</span>
+;;</code></pre>
+</body>
+</html>

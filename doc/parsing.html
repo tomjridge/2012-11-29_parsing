@@ -1,0 +1,835 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; }
+code > span.dt { color: #902000; }
+code > span.dv { color: #40a070; }
+code > span.bn { color: #40a070; }
+code > span.fl { color: #40a070; }
+code > span.ch { color: #4070a0; }
+code > span.st { color: #4070a0; }
+code > span.co { color: #60a0b0; font-style: italic; }
+code > span.ot { color: #007020; }
+code > span.al { color: #ff0000; font-weight: bold; }
+code > span.fu { color: #06287e; }
+code > span.er { color: #ff0000; font-weight: bold; }
+  </style>
+</head>
+<body>
+<div id="TOC">
+<ul>
+<li><a href="#graph-of-dependencies-in-current-file">Graph of dependencies in current file</a></li>
+<li><a href="#core">Core</a><ul>
+<li><a href="#precorepostcore---functor-defn">Precore,postcore - functor defn</a></li>
+<li><a href="#library">Library</a></li>
+<li><a href="#types">Types</a></li>
+<li><a href="#substrings">Substrings</a></li>
+<li><a href="#common-functions">Common functions</a></li>
+<li><a href="#combinators">Combinators</a></li>
+<li><a href="#basic-parsers">Basic parsers</a></li>
+<li><a href="#context">Context</a></li>
+<li><a href="#grammar_to_parser"><code>grammar_to_parser</code></a></li>
+<li><a href="#parse-a-grammar-file">Parse a grammar file</a></li>
+</ul></li>
+<li><a href="#entry-points-main-functions">Entry points (main functions)</a><ul>
+<li><a href="#cl---command-line-parsing">cl - command line parsing</a></li>
+<li><a href="#main---main-entry-point-for-parsing-not-parser-generator">main - main entry point for parsing (not parser generator)</a></li>
+<li><a href="#main_gen---parser-generator">main_gen - parser generator</a></li>
+</ul></li>
+</ul>
+</div>
+<h1 id="graph-of-dependencies-in-current-file"><a href="#TOC">Graph of dependencies in current file</a></h1>
+<p>The following shows the dependencies present in this file.</p>
+<pre><code>    core (library) ----+
+    |                  |   
+    coretermnonterm    (external term/nonterm)
+    |                  |
+    core --------------+
+    |
+    +---+  
+    |   |
+    X   parseg
+        |
+        cl ----------------------+
+        |       |        |       |
+        main_cf main_cft main_pt main_simp</code></pre>
+<h1 id="core"><a href="#TOC">Core</a></h1>
+<h2 id="precorepostcore---functor-defn"><a href="#TOC">Precore,postcore - functor defn</a></h2>
+<h2 id="library"><a href="#TOC">Library</a></h2>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+<span class="kw">type</span> (&#39;a,&#39;b) sum = <span class="dt">Inl</span> <span class="kw">of</span> &#39;a | <span class="dt">Inr</span> <span class="kw">of</span> &#39;b
+
+<span class="co">(* FIXME change names of predefined combinators to reflect use of not_epsilon (i.e. default is epsilon) *)</span>
+
+<span class="kw">let</span> <span class="kw">rec</span> itlist f l b =
+  <span class="kw">match</span> l <span class="kw">with</span>
+    [] -&gt; b
+  | (h::t) -&gt; f h (itlist f t b);;
+
+<span class="kw">let</span> <span class="kw">rec</span> mem x lis =
+  <span class="kw">match</span> lis <span class="kw">with</span>
+    [] -&gt; <span class="kw">false</span>
+  | (h::t) -&gt; Pervasives<span class="kw">.</span>compare x h = 0 <span class="kw">or</span> mem x t;;
+
+<span class="kw">let</span> insert x l =
+  <span class="kw">if</span> mem x l <span class="kw">then</span> l <span class="kw">else</span> x::l;;
+
+<span class="kw">let</span> union l1 l2 = itlist insert l1 l2;;
+
+<span class="kw">let</span> unions l = itlist union l [];;
+
+
+<span class="kw">let</span> ($) f g x = f(g x)
+
+<span class="kw">let</span> read_file_as_string fn = 
+  <span class="kw">let</span> f = open_in fn <span class="kw">in</span>
+  <span class="kw">let</span> s = <span class="dt">ref</span> <span class="st">&quot;&quot;</span> <span class="kw">in</span>
+  <span class="kw">let</span> _ = <span class="kw">try</span> (<span class="kw">while</span>(<span class="kw">true</span>) <span class="kw">do</span> s := (!s) ^ (input_line f) ^ <span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span> <span class="kw">done</span>) <span class="kw">with</span> _ -&gt; () <span class="kw">in</span>
+  <span class="kw">let</span> _ = close_in f <span class="kw">in</span>
+  !s
+
+<span class="co">(* our contexts are sorted; we need insertion into a sorted list; we expect no duplicates  *)</span>
+<span class="kw">let</span> <span class="kw">rec</span> myinsert cmp elt lst = <span class="kw">match</span> lst <span class="kw">with</span>
+  [] -&gt; [elt]
+| head :: tail -&gt; <span class="kw">let</span> r = cmp elt head <span class="kw">in</span> <span class="kw">if</span> r &lt; 0  <span class="kw">then</span> elt :: lst <span class="kw">else</span> (
+  <span class="kw">if</span> r = 0 <span class="kw">then</span> failwith <span class="st">&quot;myinsert&quot;</span> <span class="kw">else</span> head :: myinsert cmp elt tail)
+
+<span class="co">(* get a list with no duplicates; very inefficient *)</span>
+<span class="kw">let</span> unique_f res e = <span class="kw">if</span> List<span class="kw">.</span>mem e res <span class="kw">then</span> res <span class="kw">else</span> e::res
+
+<span class="kw">let</span> unique = <span class="kw">fun</span> e -&gt; List<span class="kw">.</span>fold_left unique_f [] e
+
+<span class="kw">let</span> dest_Some x = <span class="kw">match</span> x <span class="kw">with</span> <span class="dt">Some</span> y -&gt; y | _ -&gt; failwith <span class="st">&quot;dest_Some&quot;</span>
+</code></pre>
+<h2 id="types"><a href="#TOC">Types</a></h2>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+<span class="kw">type</span> substring = <span class="dt">string</span> * <span class="dt">int</span> * <span class="dt">int</span>
+
+<span class="kw">type</span> symbol = <span class="dt">NT</span> <span class="kw">of</span> nonterm | <span class="dt">TM</span> <span class="kw">of</span> term
+
+<span class="kw">type</span> rhs = (symbol <span class="dt">list</span>) <span class="dt">list</span>
+
+<span class="kw">type</span> parse_rule = nonterm * rhs
+
+<span class="kw">type</span> grammar = parse_rule <span class="dt">list</span>
+
+<span class="kw">type</span> parse_tree = <span class="dt">NODE</span> <span class="kw">of</span> nonterm * parse_tree <span class="dt">list</span> | <span class="dt">LF</span> <span class="kw">of</span> term * substring
+
+<span class="co">(* local_context invariant: each entry has the same substring (ie the</span>
+<span class="co">most restrictive substring); entries are sorted on nonterm *)</span>
+
+<span class="kw">type</span> lc_substring = <span class="dt">int</span> * <span class="dt">int</span>
+
+<span class="kw">type</span> local_context = (nonterm * lc_substring) <span class="dt">list</span> 
+
+<span class="kw">type</span> ty_input = { lc1 : local_context; sb1 : substring }
+
+<span class="kw">type</span> &#39;a <span class="kw">parser</span> = ty_input -&gt; (&#39;a * substring) <span class="dt">list</span>
+
+<span class="kw">type</span> ty_p_of_tm = term -&gt; substring <span class="kw">parser</span>
+
+<span class="co">(* memoization *)</span>
+<span class="kw">type</span> key = (nonterm * local_context * lc_substring)
+
+<span class="kw">type</span> ty_compact_form = (nonterm * lc_substring) <span class="dt">list</span>
+
+<span class="co">(* compact forms *)</span>
+<span class="kw">type</span> parsed_sym = (symbol * lc_substring)
+<span class="kw">type</span> parse_result = 
+  | <span class="dt">PNODE</span> <span class="kw">of</span> (nonterm * lc_substring) * (parsed_sym <span class="dt">list</span>)
+  | <span class="dt">PLEAF</span> <span class="kw">of</span> (term * lc_substring)
+
+<span class="co">(* grammar_to_parser parameterization *)</span>
+
+<span class="kw">type</span> &#39;a g2p_params = {
+  p_of_tm3: term -&gt; &#39;a <span class="kw">parser</span>;
+  then_list3: nonterm -&gt; &#39;a <span class="kw">parser</span> <span class="dt">list</span> -&gt; &#39;a <span class="kw">parser</span>;
+  check_and_upd_lctxt3: nonterm -&gt; &#39;a <span class="kw">parser</span> -&gt; &#39;a <span class="kw">parser</span>;
+  unique3: &#39;a <span class="kw">parser</span> -&gt; &#39;a <span class="kw">parser</span>;
+}</code></pre>
+<h2 id="substrings"><a href="#TOC">Substrings</a></h2>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">let</span> <span class="dt">string</span> (s,l,h) = s
+
+<span class="kw">let</span> (low,high,len) = (
+  (<span class="kw">fun</span> (s,l,h) -&gt; l), 
+  (<span class="kw">fun</span> (s,l,h) -&gt; h), 
+  (<span class="kw">fun</span> (s,l,h) -&gt; h-l))
+
+<span class="kw">let</span> full s = (s,0,String<span class="kw">.</span>length s)
+
+<span class="kw">let</span> inc_low n (s,l,h) = (s,l+n,h)
+<span class="kw">let</span> dec_high n (s,l,h) = (s,l,h-n)
+<span class="kw">let</span> inc_high n (s,l,h) = (s,l,h+n)
+
+<span class="kw">let</span> content s = 
+  String<span class="kw">.</span>sub (<span class="dt">string</span> s) (low s) (len s)
+
+<span class="kw">let</span> concatenate_two s1 s2 = 
+  <span class="kw">if</span> (<span class="dt">string</span> s1 = <span class="dt">string</span> s2) &amp;&amp; (high s1 = low s2) <span class="kw">then</span>
+    <span class="dt">Some</span> (<span class="dt">string</span> s1, low s1, high s2)
+  <span class="kw">else</span>
+    <span class="dt">None</span>
+
+<span class="kw">let</span> <span class="kw">rec</span> concatenate_list ss = <span class="kw">match</span> ss <span class="kw">with</span> 
+  [] -&gt; <span class="dt">None</span>
+| s1::ss -&gt; (<span class="kw">match</span> ss <span class="kw">with</span>
+    [] -&gt; <span class="dt">Some</span> s1
+  | _ -&gt; (<span class="kw">match</span> concatenate_list ss <span class="kw">with</span> 
+      <span class="dt">None</span> -&gt; <span class="dt">None</span>
+  |   <span class="dt">Some</span> s2 -&gt; concatenate_two s1 s2))
+</code></pre>
+<h2 id="common-functions"><a href="#TOC">Common functions</a></h2>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">let</span> string_of_symbol sym = <span class="kw">match</span> sym <span class="kw">with</span> | <span class="dt">NT</span> nt -&gt; <span class="st">&quot;NT(&quot;</span>^(string_of_nt nt)^<span class="st">&quot;)&quot;</span> | <span class="dt">TM</span> tm -&gt; <span class="st">&quot;TM(&quot;</span>^(string_of_tm tm)^<span class="st">&quot;)&quot;</span>
+
+<span class="kw">let</span> string_of_substring (s,l,h) = <span class="st">&quot;(&quot;</span>^s^<span class="st">&quot;,&quot;</span>^(string_of_int l)^<span class="st">&quot;,&quot;</span>^(string_of_int h)^<span class="st">&quot;)&quot;</span>
+
+<span class="kw">let</span> lc_substring_of (s,l,h) = (l,h)
+
+<span class="kw">let</span> is_NT s = <span class="kw">match</span> s <span class="kw">with</span> <span class="dt">NT</span> _ -&gt; <span class="kw">true</span> | _ -&gt; <span class="kw">false</span>
+
+<span class="kw">let</span> dest_NT sym = <span class="kw">match</span> sym <span class="kw">with</span> <span class="dt">NT</span> x -&gt; x | _ -&gt; failwith <span class="st">&quot;dest_NT&quot;</span>
+
+<span class="kw">let</span> is_TM sym = <span class="kw">match</span> sym <span class="kw">with</span> <span class="dt">TM</span> _ -&gt; <span class="kw">true</span> | _ -&gt; <span class="kw">false</span>
+
+<span class="kw">let</span> dest_TM sym = <span class="kw">match</span> sym <span class="kw">with</span> <span class="dt">NT</span> _ -&gt; failwith <span class="st">&quot;dest_TM&quot;</span> | <span class="dt">TM</span> tm -&gt; tm
+
+<span class="kw">let</span> eps = <span class="dt">TM</span>(eps) <span class="co">(* fix one particular terminal for eps *)</span>
+
+<span class="kw">let</span> toinput s = { lc1=[]; sb1=s } 
+
+<span class="kw">let</span> (_:substring -&gt; ty_input) = toinput
+
+<span class="kw">let</span> substr i = i.sb1
+
+<span class="kw">let</span> (_:ty_input -&gt; substring) = substr
+
+<span class="kw">let</span> lift f i = { i <span class="kw">with</span> sb1=(f i.sb1) }
+
+<span class="kw">let</span> (_: (substring -&gt; substring) -&gt; (ty_input -&gt; ty_input)) = lift
+
+<span class="kw">let</span> syms_of_rhs rhs = unions rhs
+
+<span class="kw">let</span> syms_of_parse_rule (nt,rhs) = insert (<span class="dt">NT</span>(nt)) (syms_of_rhs rhs)
+
+<span class="kw">let</span> syms_of_grammar g = unions (List<span class="kw">.</span>map syms_of_parse_rule g)
+</code></pre>
+<h2 id="combinators"><a href="#TOC">Combinators</a></h2>
+<p>It is worth noting that nothing in the following definitions depends on the notion of context. Context comes later, and is modularly combined with the following.</p>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="co">(* &#39;a parser -&gt; &#39;b parser -&gt; (&#39;a * &#39;b) parser *)</span>
+<span class="co">(*</span>
+<span class="co">let ( **&gt; ) p1 p2 = fun i -&gt;</span>
+<span class="co">  let f (e1,s1) = </span>
+<span class="co">    List.map (fun (e2,s2) -&gt; ((e1,e2),s2)) (p2 { gc=i.gc; lc1=i.lc1; sb=s1 }) </span>
+<span class="co">  in</span>
+<span class="co">  (List.concat $ (List.map f) $ p1) i</span>
+
+<span class="co">let (_:&#39;a parser -&gt; &#39;b parser -&gt; (&#39;a * &#39;b) parser) = ( **&gt; )</span>
+<span class="co">*)</span>
+
+<span class="co">(* &#39;a parser -&gt; (&#39;a -&gt; &#39;b) -&gt; &#39;b parser *)</span>
+<span class="kw">let</span> (&gt;&gt;) p f = 
+  (List<span class="kw">.</span>map (<span class="kw">fun</span> (e,s) -&gt; (f e, s))) $ p
+
+<span class="co">(* &#39;a parser -&gt; &#39;a parser -&gt; &#39;a parser *)</span>
+<span class="kw">let</span> (|||) p1 p2 = <span class="kw">fun</span> s -&gt; List<span class="kw">.</span>append (p1 s) (p2 s)
+
+<span class="co">(* a version of the combinator that ignores duplicate entries FIXME *)</span>
+<span class="kw">let</span> ( **&gt; ) p1 p2 = <span class="kw">fun</span> i -&gt;
+  <span class="kw">let</span> f (e1,s1) = 
+    List<span class="kw">.</span>map (<span class="kw">fun</span> (e2,s2) -&gt; ((e1,e2),s2)) (p2 { lc1=i.lc1; sb1=s1 }) 
+  <span class="kw">in</span>
+  ((List<span class="kw">.</span>concat $ (List<span class="kw">.</span>map f) $ p1) i)
+
+<span class="kw">let</span> (_:&#39;a <span class="kw">parser</span> -&gt; &#39;b <span class="kw">parser</span> -&gt; (&#39;a * &#39;b) <span class="kw">parser</span>) = ( **&gt; )
+
+
+<span class="kw">let</span> always = <span class="kw">fun</span> i -&gt; [([],substr i)]
+
+<span class="kw">let</span> never = <span class="kw">fun</span> i -&gt; []
+
+
+<span class="kw">let</span> <span class="kw">rec</span> then_list ps = <span class="kw">match</span> ps <span class="kw">with</span> 
+| [] -&gt; always
+| p::ps -&gt; (p **&gt; (then_list ps)) 
+    &gt;&gt; (<span class="kw">fun</span> (x,xs) -&gt; (x::xs))
+
+<span class="kw">let</span> then_list2 nt = <span class="kw">fun</span> ps -&gt; then_list ps &gt;&gt; (<span class="kw">fun</span> xs -&gt; <span class="dt">NODE</span>(nt,xs))
+
+
+<span class="kw">let</span> <span class="kw">rec</span> or_list ps = <span class="kw">match</span> ps <span class="kw">with</span> 
+| [] -&gt; never
+| p::ps -&gt; (p ||| (or_list ps))
+
+
+<span class="co">(* &#39;a parser -&gt; &#39;a parser *)</span>
+<span class="kw">let</span> ignr_last p = <span class="kw">fun</span> i -&gt; 
+  <span class="kw">if</span> len (substr i) = 0 <span class="kw">then</span> [] <span class="kw">else</span>
+  <span class="kw">let</span> inc_high (e,s) = (e,inc_high 1 s) <span class="kw">in</span> 
+  ((List<span class="kw">.</span>map inc_high) $ p $ (lift (dec_high 1))) i
+
+<span class="kw">let</span> (_:&#39;a <span class="kw">parser</span> -&gt; &#39;a <span class="kw">parser</span>) = ignr_last
+
+
+<span class="kw">let</span> not_epsilon p = <span class="kw">fun</span> i -&gt;
+  List<span class="kw">.</span>filter (<span class="kw">fun</span> (v,_) -&gt; not (len v = 0)) (p i)
+
+<span class="kw">let</span> (_:substring <span class="kw">parser</span> -&gt; substring <span class="kw">parser</span>) = not_epsilon
+
+<span class="kw">let</span> noteps p = <span class="kw">fun</span> i -&gt; 
+  List<span class="kw">.</span>filter (<span class="kw">fun</span> (_,srem) -&gt; srem &lt;&gt; substr i) (p i)
+
+<span class="kw">let</span> (_:&#39;a <span class="kw">parser</span> -&gt; &#39;a <span class="kw">parser</span>) = noteps
+
+<span class="co">(* string -&gt; substring parser *)</span>
+<span class="kw">let</span> a lit = <span class="kw">fun</span> i -&gt;
+  <span class="kw">let</span> n = String<span class="kw">.</span>length lit <span class="kw">in</span>
+  <span class="kw">let</span> s = substr i <span class="kw">in</span>
+  <span class="kw">if</span> 
+    (n &lt;= len s) 
+    &amp;&amp; (String<span class="kw">.</span>sub (<span class="dt">string</span> s) (low s) n = lit) 
+  <span class="kw">then</span>
+    <span class="kw">let</span> (s1,l,h) = s <span class="kw">in</span>
+    <span class="kw">let</span> s2 = (s1,l,l+n) <span class="kw">in</span>
+    [(s2,inc_low n s)]
+  <span class="kw">else</span>
+    []
+
+<span class="kw">let</span> (_:substring <span class="kw">parser</span>) = (a <span class="st">&quot;1&quot;</span>)
+
+<span class="kw">let</span> <span class="kw">rec</span> listof item sep = <span class="kw">fun</span> i -&gt; 
+  (((a <span class="st">&quot;&quot;</span>) &gt;&gt; (<span class="kw">fun</span> _ -&gt; []))
+   ||| (item &gt;&gt; (<span class="kw">fun</span> x -&gt; [x]))
+   ||| ((item **&gt; sep **&gt; (listof item sep)) &gt;&gt; (<span class="kw">fun</span> (x,(_,xs)) -&gt; x::xs))) i
+
+<span class="kw">let</span> <span class="kw">rec</span> star item = <span class="kw">fun</span> i -&gt; 
+  (((a <span class="st">&quot;&quot;</span>) &gt;&gt; (<span class="kw">fun</span> _ -&gt; []))
+   ||| ((item **&gt; (star item)) &gt;&gt; (<span class="kw">fun</span> (x,xs) -&gt; x::xs))) i
+
+<span class="kw">let</span> <span class="kw">rec</span> itern item n = (<span class="kw">match</span> n <span class="kw">with</span> 
+  | 0 -&gt; ((a <span class="st">&quot;&quot;</span>) &gt;&gt; (<span class="kw">fun</span> _ -&gt; []))
+  | _ -&gt; ((item **&gt; (itern item (n<span class="dv">-1</span>))) &gt;&gt; (<span class="kw">fun</span> (x,xs) -&gt; x::xs)) )
+
+<span class="kw">let</span> just a = (always &gt;&gt; (<span class="kw">fun</span> _ -&gt; a))
+
+<span class="kw">let</span> braskets bra item ket = <span class="kw">fun</span> i -&gt;
+  <span class="kw">let</span> rs1 = ((star bra) i) <span class="kw">in</span>
+  <span class="co">(* rs1 is a list of results, each result is a list of the bra results *)</span>
+  <span class="kw">let</span> f (e1,s1) = 
+    <span class="kw">let</span> p = (item **&gt; (itern ket (List<span class="kw">.</span>length e1))) &gt;&gt; (<span class="kw">fun</span> (x,xs) -&gt; (e1,x,xs)) <span class="kw">in</span>
+    p { lc1=i.lc1; sb1=s1 }
+  <span class="kw">in</span>
+  List<span class="kw">.</span>concat (List<span class="kw">.</span>map f rs1)
+</code></pre>
+<h2 id="basic-parsers"><a href="#TOC">Basic parsers</a></h2>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+
+<span class="co">(* FIXME change this to take an underlying parser *)</span>
+<span class="kw">let</span> until_a lit = <span class="kw">fun</span> i -&gt; 
+  <span class="kw">let</span> llit = String<span class="kw">.</span>length lit <span class="kw">in</span>
+  <span class="kw">let</span> s = substr i <span class="kw">in</span>
+  <span class="kw">let</span> <span class="kw">rec</span> f1 n =
+    <span class="kw">if</span> 
+      n+llit &lt;= len s
+      &amp;&amp; (String<span class="kw">.</span>sub (<span class="dt">string</span> s) ((low s)+n) llit) = lit
+    <span class="kw">then</span>
+      <span class="kw">let</span> (s1,l,h) = s <span class="kw">in</span>
+      <span class="kw">let</span> s2 = (s1,l,l+n) <span class="kw">in</span>
+      [(s2,inc_low n s)]
+    <span class="kw">else</span> <span class="kw">if</span> 
+        n+llit &lt;= len s
+    <span class="kw">then</span> 
+      f1 (n+1)
+    <span class="kw">else</span>
+      <span class="kw">let</span> (s1,l,h) = s <span class="kw">in</span>
+      [(s,(s1,h,h))]
+  <span class="kw">in</span>
+  f1 0
+
+
+<span class="co">(* pred is a function from a string of length 1 to a bool *)</span>
+<span class="kw">let</span> parse1 pred = <span class="kw">fun</span> i -&gt; 
+  <span class="kw">let</span> s = substr i <span class="kw">in</span>
+  <span class="kw">if</span> (1 &lt;= len s &amp;&amp; pred (String<span class="kw">.</span>sub (<span class="dt">string</span> s) (low s) 1)) <span class="kw">then</span>
+    [((<span class="dt">string</span> s, low s, 1+low s),inc_low 1 s)]
+  <span class="kw">else</span> 
+    []
+
+<span class="kw">let</span> parse_azAZ = 
+  <span class="kw">let</span> pred = <span class="kw">fun</span> c -&gt;
+    ((String<span class="kw">.</span>compare <span class="st">&quot;A&quot;</span> c &lt;= 0) &amp;&amp; (String<span class="kw">.</span>compare c <span class="st">&quot;Z&quot;</span> &lt;= 0))
+    || ((String<span class="kw">.</span>compare <span class="st">&quot;a&quot;</span> c &lt;= 0) &amp;&amp; (String<span class="kw">.</span>compare c <span class="st">&quot;z&quot;</span> &lt;= 0))
+  <span class="kw">in</span>
+  parse1 pred
+
+<span class="kw">let</span> (_:substring <span class="kw">parser</span>) = parse_azAZ
+
+
+
+<span class="kw">let</span> parse_EOF = <span class="kw">fun</span> i -&gt; (
+  <span class="kw">if</span> (low i.sb1 = high i.sb1) &amp;&amp; (high i.sb1 = String<span class="kw">.</span>length (<span class="dt">string</span> i.sb1)) <span class="kw">then</span> 
+    (a <span class="st">&quot;&quot;</span>) i 
+  <span class="kw">else</span> 
+    never i)
+
+<span class="kw">let</span> a1 = (a <span class="st">&quot;1&quot;</span>) &gt;&gt; (<span class="kw">fun</span> _ -&gt; 1)
+
+<span class="co">(* can return eps; FIXME this is incredibly dangerous, and breaks wf of terminal parsers *)</span>
+<span class="kw">let</span> parse_while pred = <span class="kw">fun</span> i -&gt;
+  <span class="kw">let</span> s = substr i <span class="kw">in</span>
+  <span class="kw">let</span> <span class="kw">rec</span> f = <span class="kw">fun</span> n -&gt; 
+    <span class="kw">if</span> n = len s <span class="kw">then</span> len s <span class="kw">else</span>
+    <span class="kw">let</span> c = String<span class="kw">.</span>sub (<span class="dt">string</span> s) ((low s)+n) 1 <span class="kw">in</span>
+    <span class="kw">if</span> pred c <span class="kw">then</span> f (n+1) <span class="kw">else</span> n 
+  <span class="kw">in</span>
+  <span class="kw">let</span> n = f 0 <span class="kw">in</span>
+  <span class="kw">let</span> r = (<span class="dt">string</span> s, low s, (low s)+n) <span class="kw">in</span>
+  [(r,inc_low n s)]
+
+<span class="kw">let</span> (_:(<span class="dt">string</span> -&gt; <span class="dt">bool</span>) -&gt; substring <span class="kw">parser</span>) = parse_while
+
+<span class="kw">let</span> parse_AZS = 
+  <span class="kw">let</span> pred c = 
+    (String<span class="kw">.</span>compare <span class="st">&quot;A&quot;</span> c &lt;= 0) 
+    &amp;&amp; (String<span class="kw">.</span>compare c <span class="st">&quot;Z&quot;</span> &lt;= 0) 
+  <span class="kw">in</span>
+  not_epsilon (parse_while pred)
+
+<span class="kw">let</span> parse_ws = not_epsilon (parse_while (<span class="kw">fun</span> s -&gt; s = <span class="st">&quot; &quot;</span> || s = <span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span>))
+
+<span class="kw">let</span> parse_epsws = (parse_while (<span class="kw">fun</span> s -&gt; s = <span class="st">&quot; &quot;</span> || s = <span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span>))
+
+<span class="kw">let</span> parse_newline = a <span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span>
+
+<span class="kw">let</span> parse_azAZs = 
+  <span class="kw">let</span> pred = <span class="kw">fun</span> c -&gt;
+    ((String<span class="kw">.</span>compare <span class="st">&quot;A&quot;</span> c &lt;= 0) &amp;&amp; (String<span class="kw">.</span>compare c <span class="st">&quot;Z&quot;</span> &lt;= 0))
+    || ((String<span class="kw">.</span>compare <span class="st">&quot;a&quot;</span> c &lt;= 0) &amp;&amp; (String<span class="kw">.</span>compare c <span class="st">&quot;z&quot;</span> &lt;= 0))
+  <span class="kw">in</span>
+  not_epsilon (parse_while pred)
+
+<span class="kw">let</span> parse_notdquote = 
+  parse_while (<span class="kw">fun</span> c -&gt; not (c = <span class="st">&quot;</span><span class="ch">\&quot;</span><span class="st">&quot;</span>))
+
+<span class="kw">let</span> parse_notsquote = 
+  parse_while (<span class="kw">fun</span> c -&gt; not (c = <span class="st">&quot;&#39;&quot;</span>))
+
+<span class="kw">let</span> parse_notlt = 
+  parse_while (<span class="kw">fun</span> c -&gt; not (c = <span class="st">&quot;&lt;&quot;</span>))
+
+<span class="kw">let</span> parse_notgt = 
+  parse_while (<span class="kw">fun</span> c -&gt; not (c = <span class="st">&quot;&gt;&quot;</span>))
+
+<span class="kw">let</span> parse_notltgt = 
+  parse_while (<span class="kw">fun</span> c -&gt; not ((c = <span class="st">&quot;&lt;&quot;</span>) || (c = <span class="st">&quot;&gt;&quot;</span>)))
+
+<span class="kw">let</span> parse_notbracket = 
+  parse_while (<span class="kw">fun</span> c -&gt; not ((c = <span class="st">&quot;(&quot;</span>) || (c = <span class="st">&quot;)&quot;</span>)))
+
+<span class="kw">let</span> parse_notws =
+  parse_while (<span class="kw">fun</span> c -&gt; not (c = <span class="st">&quot; &quot;</span>))
+
+<span class="kw">let</span> parse_notcurlyr = parse_while (<span class="kw">fun</span> c -&gt; not (c = <span class="st">&quot;}&quot;</span>))
+
+<span class="kw">let</span> parse_all = 
+  parse_while (<span class="kw">fun</span> c -&gt; <span class="kw">true</span>)
+
+<span class="kw">let</span> parse_num = 
+  <span class="kw">let</span> pred = <span class="kw">fun</span> c -&gt;
+    (String<span class="kw">.</span>compare <span class="st">&quot;0&quot;</span> c &lt;= 0) &amp;&amp; (String<span class="kw">.</span>compare c <span class="st">&quot;9&quot;</span> &lt;= 0)
+  <span class="kw">in</span>
+  not_epsilon (parse_while pred)
+
+<span class="kw">let</span> parse_ident = 
+  <span class="kw">let</span> pred = <span class="kw">fun</span> c -&gt; 
+    ((String<span class="kw">.</span>compare <span class="st">&quot;A&quot;</span> c &lt;= 0) &amp;&amp; (String<span class="kw">.</span>compare c <span class="st">&quot;Z&quot;</span> &lt;= 0))
+    || ((String<span class="kw">.</span>compare <span class="st">&quot;a&quot;</span> c &lt;= 0) &amp;&amp; (String<span class="kw">.</span>compare c <span class="st">&quot;z&quot;</span> &lt;= 0))
+    || (String<span class="kw">.</span>compare <span class="st">&quot;0&quot;</span> c &lt;= 0) &amp;&amp; (String<span class="kw">.</span>compare c <span class="st">&quot;9&quot;</span> &lt;= 0)
+    || (c = <span class="st">&quot;_&quot;</span>) || (c = <span class="st">&quot;&#39;&quot;</span>)
+  <span class="kw">in</span>
+  not_epsilon (parse_while pred)
+
+<span class="co">(* parsers for command line parsing *)</span>
+
+<span class="co">(* we use &quot;\x00&quot; as an arg separator - assumes this char does not appear on the cl *)</span>
+<span class="kw">let</span> parse_FLAG = ((a <span class="st">&quot;-&quot;</span>) **&gt; parse_azAZs) &gt;&gt; (<span class="kw">fun</span> (_,s) -&gt; <span class="st">&quot;-&quot;</span>^(content s))
+
+
+<span class="co">(* first char should not be a - *)</span>
+<span class="kw">let</span> parse_ARG = 
+  <span class="kw">let</span> parse_not_minus = parse1 (<span class="kw">fun</span> c -&gt; c &lt;&gt; <span class="st">&quot;-&quot;</span>) <span class="kw">in</span>
+  (parse_not_minus **&gt; parse_while (<span class="kw">fun</span> s -&gt; s &lt;&gt; <span class="st">&quot;</span><span class="ch">\x00</span><span class="st">&quot;</span>)) &gt;&gt; (<span class="kw">fun</span> (s1,s2) -&gt; ((content s1)^(content s2)))
+
+<span class="kw">let</span> parse_FLARGS = 
+  <span class="kw">let</span> sep = a <span class="st">&quot;</span><span class="ch">\x00</span><span class="st">&quot;</span> <span class="kw">in</span>
+  (parse_FLAG **&gt; sep **&gt; (listof parse_ARG sep)) &gt;&gt; (<span class="kw">fun</span> (f,(_,xs)) -&gt; (f,xs)) 
+
+<span class="kw">let</span> term_to_parser s = 
+  <span class="kw">match</span> s <span class="kw">with</span>
+  | <span class="st">&quot;?AZS?&quot;</span> -&gt; parse_AZS 
+  | <span class="st">&quot;?all?&quot;</span>   -&gt; parse_all
+  | <span class="st">&quot;?azAZ?&quot;</span> -&gt; parse_azAZ 
+  | <span class="st">&quot;?azAZs?&quot;</span> -&gt; parse_azAZs 
+  | <span class="st">&quot;?EOF?&quot;</span> -&gt; parse_EOF
+  | <span class="st">&quot;?epsws?&quot;</span> -&gt; parse_epsws 
+  | <span class="st">&quot;?ident?&quot;</span> -&gt; parse_ident
+  | <span class="st">&quot;?newline?&quot;</span> -&gt; parse_newline
+  | <span class="st">&quot;?notbracket?&quot;</span> -&gt; parse_notbracket
+  | <span class="st">&quot;?notcurlyr?&quot;</span> -&gt; parse_notcurlyr
+  | <span class="st">&quot;?notdquote?&quot;</span> -&gt; parse_notdquote 
+  | <span class="st">&quot;?notgt?&quot;</span> -&gt; parse_notgt
+  | <span class="st">&quot;?notlt?&quot;</span> -&gt; parse_notlt
+  | <span class="st">&quot;?notltgt?&quot;</span> -&gt; parse_notltgt
+  | <span class="st">&quot;?notsquote?&quot;</span> -&gt; parse_notsquote 
+  | <span class="st">&quot;?num?&quot;</span> -&gt; parse_num
+  | <span class="st">&quot;?ws?&quot;</span> -&gt; parse_ws 
+  | <span class="st">&quot;</span><span class="ch">\&quot;\&quot;</span><span class="st">&quot;</span> -&gt; a <span class="st">&quot;&quot;</span>
+  | _ -&gt; ( <span class="co">(* interpret as a literal *)</span>
+      <span class="kw">if</span> String<span class="kw">.</span>length s &lt; 2 <span class="kw">then</span> failwith (<span class="st">&quot;term_to_parser: &quot;</span>^s) 
+      <span class="kw">else</span> 
+    <span class="kw">let</span> _ = () <span class="co">(* print_string (&quot;term_to_parser: treating &quot;^s^&quot; as a literal\n&quot;) *)</span> <span class="kw">in</span>
+    (a (String<span class="kw">.</span>sub s 1 (String<span class="kw">.</span>length s - 2))))
+
+
+<span class="kw">let</span> (_:term -&gt; substring <span class="kw">parser</span>) = term_to_parser
+</code></pre>
+<h2 id="context"><a href="#TOC">Context</a></h2>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="co">(* debug version; assumes s1 = s2 (since the only part of the context that matters is...) *)</span>
+<span class="kw">let</span> lc_cmp (nt1,(l1,h1)) (nt2,(l2,h2)) = 
+  <span class="kw">if</span> (l1,h1) &lt;&gt; (l2,h2) <span class="kw">then</span> failwith <span class="st">&quot;lc_cmp&quot;</span> <span class="kw">else</span> Pervasives<span class="kw">.</span>compare nt1 nt2
+
+<span class="co">(* remember what NT is called on what input *)</span>
+<span class="co">(* nonterm -&gt; &#39;a parser -&gt; &#39;a parser *)</span>
+<span class="kw">let</span> update_lctxt nt p = <span class="kw">fun</span> i -&gt; 
+  <span class="kw">let</span> lc = List<span class="kw">.</span>filter (<span class="kw">fun</span> (nt,(l,h)) -&gt; (l,h) = lc_substring_of i.sb1) i.lc1 <span class="kw">in</span> 
+  p { i <span class="kw">with</span> lc1=(myinsert lc_cmp (nt,lc_substring_of i.sb1) lc) }
+
+<span class="kw">let</span> (_:nonterm -&gt; &#39;a <span class="kw">parser</span> -&gt; &#39;a <span class="kw">parser</span>) = update_lctxt
+
+<span class="co">(* nonterm -&gt; &#39;a parser -&gt; &#39;a parser *)</span>
+<span class="kw">let</span> check_and_upd_lctxt nt p = <span class="kw">fun</span> i -&gt;
+  <span class="kw">let</span> should_trim = List<span class="kw">.</span>exists ((=) (nt,lc_substring_of i.sb1)) i.lc1 <span class="kw">in</span> 
+  <span class="kw">if</span> should_trim &amp;&amp; (len i.sb1 = 0) <span class="kw">then</span> 
+    []
+  <span class="kw">else</span> <span class="kw">if</span> should_trim <span class="kw">then</span>
+    (ignr_last (update_lctxt nt p)) i
+  <span class="kw">else</span> 
+    (update_lctxt nt p) i
+
+<span class="kw">let</span> (_:nonterm -&gt; &#39;a <span class="kw">parser</span> -&gt; &#39;a <span class="kw">parser</span>) = check_and_upd_lctxt
+
+
+<span class="co">(* simple memoization *)</span>
+
+<span class="co">(* (key,(&#39;a * substring)list) Hashtbl.t -&gt; nonterm -&gt; &#39;a parser -&gt; &#39;a parser *)</span>
+<span class="kw">let</span> memo_check_and_upd_lctxt tbl nt p i = 
+  <span class="kw">let</span> i = { i <span class="kw">with</span> lc1=List.filter (<span class="kw">fun</span> (nt,s) -&gt; s = lc_substring_of i.sb1) i.lc1} <span class="kw">in</span>
+  <span class="co">(* first look in the global memo table *)</span>
+  <span class="kw">let</span> k = (nt,i.lc1,lc_substring_of i.sb1) <span class="kw">in</span>
+  <span class="kw">if</span> Hashtbl<span class="kw">.</span>mem tbl k <span class="kw">then</span> Hashtbl<span class="kw">.</span>find tbl k <span class="kw">else</span> 
+  <span class="co">(* if not already present then proceed as normal, but remember the value *)</span>
+  <span class="kw">let</span> v = 
+    <span class="kw">let</span> should_trim = List<span class="kw">.</span>exists ((=) (nt,lc_substring_of i.sb1)) i.lc1 <span class="kw">in</span> 
+    <span class="kw">if</span> should_trim &amp;&amp; (len i.sb1 = 0) <span class="kw">then</span> 
+      []
+    <span class="kw">else</span> <span class="kw">if</span> should_trim <span class="kw">then</span>
+      (ignr_last (update_lctxt nt p)) i
+    <span class="kw">else</span> 
+      (update_lctxt nt p) i
+  <span class="kw">in</span>
+  <span class="kw">let</span> _ = Hashtbl<span class="kw">.</span>add tbl k v <span class="kw">in</span>
+  v
+
+<span class="kw">let</span> (_:(key,(&#39;a * substring)<span class="dt">list</span>) Hashtbl<span class="kw">.</span>t -&gt; nonterm -&gt; &#39;a <span class="kw">parser</span> -&gt; &#39;a <span class="kw">parser</span>) = 
+  memo_check_and_upd_lctxt
+
+;;</code></pre>
+<h2 id="grammar_to_parser"><a href="#TOC"><code>grammar_to_parser</code></a></h2>
+<p>This is the plain version that appears in the paper and the HOL4 formalization.</p>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+<span class="kw">let</span> <span class="kw">rec</span> grammar_to_parser p_of_tm g sym i = <span class="kw">match</span> sym <span class="kw">with</span> 
+  <span class="dt">TM</span> tm -&gt; ((p_of_tm tm) &gt;&gt; (<span class="kw">fun</span> v -&gt; <span class="dt">LF</span>(tm,v))) i | <span class="dt">NT</span> nt -&gt; 
+  <span class="kw">let</span> rules = List<span class="kw">.</span>filter (<span class="kw">fun</span> (nt&#39;,rhs) -&gt; nt&#39; = nt) g <span class="kw">in</span>
+  <span class="kw">let</span> alts1 = (List<span class="kw">.</span>concat $ (List<span class="kw">.</span>map snd)) rules <span class="kw">in</span>
+  <span class="kw">let</span> alts2 = List<span class="kw">.</span>map (List<span class="kw">.</span>map (grammar_to_parser p_of_tm g)) alts1 <span class="kw">in</span>
+  <span class="kw">let</span> p = or_list (List<span class="kw">.</span>map (then_list2 nt) alts2) <span class="kw">in</span>
+  check_and_upd_lctxt nt p i
+
+<span class="kw">let</span> (_: (term -&gt; substring <span class="kw">parser</span>) -&gt; grammar -&gt; symbol -&gt; parse_tree <span class="kw">parser</span>) = grammar_to_parser
+
+<span class="kw">let</span> g2p_params p_of_tm = {
+  p_of_tm3=(<span class="kw">fun</span> tm -&gt; (p_of_tm tm) &gt;&gt; (<span class="kw">fun</span> v -&gt; <span class="dt">LF</span>(tm,v)));
+  then_list3=(<span class="kw">fun</span> nt -&gt; then_list2 nt);
+  check_and_upd_lctxt3=(<span class="kw">fun</span> nt -&gt; check_and_upd_lctxt nt);
+  unique3=(<span class="kw">fun</span> p -&gt; p);
+}
+
+<span class="kw">let</span> <span class="kw">rec</span> g2p params g sym i = (<span class="kw">match</span> sym <span class="kw">with</span> 
+  <span class="dt">TM</span> tm -&gt; params.p_of_tm3 tm i | <span class="dt">NT</span> nt -&gt; 
+  <span class="kw">let</span> rules = List<span class="kw">.</span>filter (<span class="kw">fun</span> (nt&#39;,rhs) -&gt; nt&#39; = nt) g <span class="kw">in</span>
+  <span class="kw">let</span> alts1 = (List<span class="kw">.</span>concat $ (List<span class="kw">.</span>map snd)) rules <span class="kw">in</span>
+  <span class="kw">let</span> alts2 = List<span class="kw">.</span>map (List<span class="kw">.</span>map (g2p params g)) alts1 <span class="kw">in</span>
+  <span class="kw">let</span> p = or_list (List<span class="kw">.</span>map (params.then_list3 nt) alts2) <span class="kw">in</span>
+  <span class="kw">let</span> q = params.unique3 p <span class="kw">in</span>
+  params.check_and_upd_lctxt3 nt q i)
+
+<span class="co">(* version via parameterization *)</span>
+<span class="kw">let</span> grammar_to_parser p_of_tm = g2p (g2p_params p_of_tm)
+
+;;</code></pre>
+<h2 id="parse-a-grammar-file"><a href="#TOC">Parse a grammar file</a></h2>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+<span class="kw">let</span> tm_of_lit lit = <span class="dt">TM</span>(<span class="st">&quot;</span><span class="ch">\&quot;</span><span class="st">&quot;</span> ^ lit ^ <span class="st">&quot;</span><span class="ch">\&quot;</span><span class="st">&quot;</span>)
+
+<span class="kw">let</span> parse_comm = <span class="kw">fun</span> i -&gt; ((a <span class="st">&quot;(*&quot;</span>) **&gt; until_a <span class="st">&quot;*)&quot;</span> **&gt; (a <span class="st">&quot;*)&quot;</span>)) i
+
+<span class="co">(* FIXME only one comment in ws? *)</span>
+<span class="kw">let</span> parse_wscomm = 
+  ((parse_ws &gt;&gt; (<span class="kw">fun</span> _ -&gt; <span class="st">&quot;&quot;</span>))
+   ||| ((parse_ws **&gt; parse_comm **&gt; parse_ws) &gt;&gt; (<span class="kw">fun</span> _ -&gt; <span class="st">&quot;&quot;</span>)))
+
+<span class="kw">let</span> <span class="kw">rec</span> parse_GRAMMAR = <span class="kw">fun</span> i -&gt; 
+  ((parse_RULES **&gt; parse_wscomm **&gt; parse_EOF) &gt;&gt; (<span class="kw">fun</span> (rs,(_,_)) -&gt; rs)) i
+
+<span class="kw">and</span> parse_RULES = <span class="kw">fun</span> i -&gt; (listof parse_RULE parse_wscomm) i
+
+<span class="kw">and</span> parse_RULE = <span class="kw">fun</span> i -&gt;
+  ((parse_SYM **&gt; parse_wscomm **&gt; (a <span class="st">&quot;-&gt;&quot;</span>) **&gt; parse_wscomm **&gt; parse_SYMSLIST) &gt;&gt; (<span class="kw">fun</span> (nt,(_,(_,(_,syms)))) -&gt; (dest_NT nt,syms))) i
+
+<span class="kw">and</span> parse_SYMSLIST = <span class="kw">fun</span> i -&gt; 
+  (listof parse_SYMS (parse_wscomm **&gt; (a <span class="st">&quot;|&quot;</span>) **&gt; parse_wscomm)) i
+
+<span class="co">(* N.B. we do not allow empty lists here *)</span>
+<span class="kw">and</span> parse_SYMS = <span class="kw">fun</span> i -&gt;
+  (noteps (listof parse_SYM parse_wscomm))  i
+
+<span class="kw">and</span> parse_SYM = <span class="kw">fun</span> i -&gt;
+  ((((a <span class="st">&quot;</span><span class="ch">\&quot;</span><span class="st">&quot;</span>) **&gt; parse_notdquote **&gt; (a <span class="st">&quot;</span><span class="ch">\&quot;</span><span class="st">&quot;</span>)) &gt;&gt; (<span class="kw">fun</span> (_,(s,_)) -&gt; tm_of_lit (content s)))
+  ||| (((a <span class="st">&quot;&#39;&quot;</span>) **&gt; parse_notsquote **&gt; (a <span class="st">&quot;&#39;&quot;</span>)) &gt;&gt; (<span class="kw">fun</span> (_,(s,_)) -&gt; tm_of_lit (content s)))
+  ||| (parse_AZS &gt;&gt; (<span class="kw">fun</span> s -&gt; <span class="dt">NT</span> (content s)))
+  ||| (((a <span class="st">&quot;?&quot;</span>) **&gt; parse_azAZs **&gt; (a <span class="st">&quot;?&quot;</span>)) &gt;&gt; (<span class="kw">fun</span> (_,(s,_)) -&gt; <span class="dt">TM</span>(<span class="st">&quot;?&quot;</span> ^ (content s) ^ <span class="st">&quot;?&quot;</span>))))
+    i
+
+<span class="co">(* FIXME version with actions *)</span>
+
+<span class="kw">let</span> <span class="kw">rec</span> parse_GRAMMAR_WITH_ACTIONS = <span class="kw">fun</span> i -&gt; 
+  ((parse_HG **&gt; parse_wscomm **&gt; parse_EOF) &gt;&gt; (<span class="kw">fun</span> (h,_) -&gt; h)) i
+
+<span class="kw">and</span> parse_HG = <span class="kw">fun</span> i -&gt; 
+  (parse_RULES &gt;&gt; (<span class="kw">fun</span> rs -&gt; (<span class="st">&quot;&quot;</span>,rs))
+  ||| ((parse_HEADER **&gt; parse_wscomm **&gt; parse_RULES) &gt;&gt; (<span class="kw">fun</span> (h,(_,rs)) -&gt; (h,rs)))) i
+
+<span class="kw">and</span> parse_HEADER = <span class="kw">fun</span> i -&gt; parse_CODE i
+
+<span class="kw">and</span> parse_RULES = <span class="kw">fun</span> i -&gt; (listof parse_RULE parse_wscomm) i
+
+<span class="kw">and</span> parse_RULE = <span class="kw">fun</span> i -&gt;
+  ((parse_SYM **&gt; parse_wscomm **&gt; (a <span class="st">&quot;-&gt;&quot;</span>) **&gt; parse_wscomm **&gt; parse_RHS) &gt;&gt; (<span class="kw">fun</span> (<span class="dt">NT</span> nt,(_,(_,(_,syms)))) -&gt; (nt,syms))) i
+
+<span class="kw">and</span> parse_RHS = <span class="kw">fun</span> i -&gt;
+  (listof parse_SYMSACT (parse_wscomm **&gt; (a <span class="st">&quot;|&quot;</span>) **&gt; parse_wscomm)) i
+
+<span class="kw">and</span> parse_SYMSACT = <span class="kw">fun</span> i -&gt; 
+  ((parse_SYMS **&gt; parse_wscomm **&gt; parse_ACT) &gt;&gt; (<span class="kw">fun</span> (syms,(_,act)) -&gt; (syms,act))) i
+
+<span class="kw">and</span> parse_ACT = <span class="kw">fun</span> i -&gt; parse_CODE i
+
+<span class="kw">and</span> parse_CODE = <span class="kw">fun</span> i -&gt; 
+  (((a <span class="st">&quot;{{&quot;</span>) **&gt; until_a <span class="st">&quot;}}&quot;</span> **&gt; (a <span class="st">&quot;}}&quot;</span>)) &gt;&gt; (<span class="kw">fun</span> (_lt,(act,_gt)) -&gt; (content act))) i
+
+;;</code></pre>
+<h1 id="entry-points-main-functions"><a href="#TOC">Entry points (main functions)</a></h1>
+<h2 id="cl---command-line-parsing"><a href="#TOC">cl - command line parsing</a></h2>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+
+<span class="co">(* of no interest elsewhere, so we don&#39;t move to top *)</span>
+<span class="kw">type</span> ty_cl_args = { input: <span class="dt">string</span>; grammar: <span class="dt">string</span>; alg: <span class="dt">string</span>; output:bool; memo:bool; basedir:string }
+
+<span class="co">(* precedence to earlier args *)</span>
+<span class="kw">let</span> <span class="kw">rec</span> parse_CL = <span class="kw">fun</span> i -&gt; (
+  <span class="kw">let</span> f1 (f,xs) cl = (<span class="kw">match</span> (f,xs) <span class="kw">with</span>
+    | (<span class="st">&quot;-basedir&quot;</span>,[a]) -&gt; {cl <span class="kw">with</span> basedir=a } <span class="co">(* only for main_gen *)</span>
+    | (<span class="st">&quot;-output&quot;</span>,[<span class="st">&quot;true&quot;</span>]) -&gt; {cl <span class="kw">with</span> output=true }
+    | (<span class="st">&quot;-output&quot;</span>,[<span class="st">&quot;false&quot;</span>]) -&gt; {cl <span class="kw">with</span> output=false }
+    | (<span class="st">&quot;-memo&quot;</span>,[<span class="st">&quot;true&quot;</span>]) -&gt; {cl <span class="kw">with</span> memo=true }
+    | (<span class="st">&quot;-memo&quot;</span>,[<span class="st">&quot;false&quot;</span>]) -&gt; {cl <span class="kw">with</span> memo=false }
+    | (<span class="st">&quot;-f&quot;</span>,[a]) -&gt; {cl <span class="kw">with</span> input=a }
+    | (<span class="st">&quot;-g&quot;</span>,[a]) -&gt; {cl <span class="kw">with</span> grammar=a }
+    | (<span class="st">&quot;-alg&quot;</span>,[a]) -&gt; {cl <span class="kw">with</span> alg=a }
+    | _ -&gt; (failwith (<span class="st">&quot;parse_CL: unrecognized flag/arg combination: &quot;</span>^f^<span class="st">&quot; &quot;</span>^(String<span class="kw">.</span>concat <span class="st">&quot; &quot;</span> xs))))
+  <span class="kw">in</span>
+  <span class="kw">let</span> cl0 = { input=<span class="st">&quot;/tmp/input.txt&quot;</span>; grammar=<span class="st">&quot;/tmp/grammar.g&quot;</span>; alg=<span class="st">&quot;cf&quot;</span>; output=true; memo=true; basedir=<span class="st">&quot;.&quot;</span> } <span class="kw">in</span>
+  <span class="kw">let</span> sep = a <span class="st">&quot;</span><span class="ch">\x00</span><span class="st">&quot;</span> <span class="kw">in</span>
+  (((listof parse_FLARGS sep) **&gt; parse_EOF) &gt;&gt; (<span class="kw">fun</span> (xs,_) -&gt; itlist f1 xs cl0))) i
+
+<span class="kw">let</span> args = 
+  <span class="kw">let</span> argv = List<span class="kw">.</span>tl (Array<span class="kw">.</span>to_list (Sys<span class="kw">.</span>argv)) <span class="kw">in</span>
+<span class="co">(*  let _ = print_endline (&quot;Command line: &quot;^(String.concat &quot; &quot; argv)) in *)</span>
+  <span class="kw">let</span> (r,_) = List<span class="kw">.</span>hd (parse_CL (toinput (full (String<span class="kw">.</span>concat <span class="st">&quot;</span><span class="ch">\x00</span><span class="st">&quot;</span> argv)))) <span class="kw">in</span>
+  r
+</code></pre>
+<h2 id="main---main-entry-point-for-parsing-not-parser-generator"><a href="#TOC">main - main entry point for parsing (not parser generator)</a></h2>
+<p>The following command line args are accepted:</p>
+<ul>
+<li><p>-f FILENAME (the input file)</p></li>
+<li><p>-g FILENAME (the grammar file)</p></li>
+<li><p>-output (true|false) (default true; whether to print output - useful for timing purposes)</p></li>
+<li><p>-memo (true|false) (default true; whether to memoize)</p></li>
+<li><p>-alg (cf|pt) (default cf; whether to parse for compact forms, or parse trees)</p></li>
+</ul>
+<p>There are some experimental options:</p>
+<ul>
+<li>-alg simp (memoization, but no context - the basic combinator parsing approach; won't handle recursive grammars)</li>
+</ul>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+<span class="co">(* the compact form is a list of elements (nt,(l,h)), indicating that nt could be parsed between l and h *)</span>
+<span class="kw">let</span> compact_form_of_tbl tbl = 
+  <span class="kw">let</span> r = Hashtbl<span class="kw">.</span>fold (<span class="kw">fun</span> k -&gt; <span class="kw">fun</span> v -&gt; <span class="kw">fun</span> acc -&gt;
+    <span class="kw">let</span> (nt,lc,(l,h)) = k <span class="kw">in</span>
+    <span class="kw">let</span> v&#39; = List<span class="kw">.</span>map (<span class="kw">fun</span> (a,s_rem) -&gt; (nt, (l,low s_rem))) v <span class="kw">in</span>
+    v&#39;@acc) tbl []
+  <span class="kw">in</span>
+  unique r
+
+<span class="kw">let</span> main =
+  <span class="kw">let</span> rs = (parse_GRAMMAR (toinput (full (read_file_as_string args.grammar)))) <span class="kw">in</span>
+  <span class="kw">let</span> _ = <span class="kw">if</span> List<span class="kw">.</span>length rs = 0 <span class="kw">then</span> (failwith (<span class="st">&quot;Failed to parse grammar file: &quot;</span>^args.grammar)) <span class="kw">in</span>
+  <span class="kw">let</span> _ = <span class="kw">if</span> List<span class="kw">.</span>length rs &gt; 1 <span class="kw">then</span> (failwith (<span class="st">&quot;Ambiguous grammar file: &quot;</span>^args.grammar)) <span class="kw">in</span>
+  <span class="kw">let</span> (g,_) = List<span class="kw">.</span>hd rs <span class="kw">in</span>
+  <span class="kw">let</span> txt = read_file_as_string args.input <span class="kw">in</span>
+  <span class="kw">let</span> start_sym = <span class="dt">NT</span>(fst (List<span class="kw">.</span>hd g)) <span class="kw">in</span>
+  (
+    <span class="kw">match</span> args.alg <span class="kw">with</span> 
+      | <span class="st">&quot;cf&quot;</span> -&gt; (
+        <span class="kw">let</span> tbl = Hashtbl<span class="kw">.</span>create 100 <span class="kw">in</span>
+        <span class="kw">let</span> memo_grammar_to_parser tbl p_of_tm = 
+          <span class="kw">let</span> ps = {
+            p_of_tm3=(<span class="kw">fun</span> tm -&gt; (p_of_tm tm) &gt;&gt; (<span class="kw">fun</span> _ -&gt; tm));
+            then_list3=(<span class="kw">fun</span> nt -&gt; <span class="kw">fun</span> alt -&gt; then_list alt &gt;&gt; (<span class="kw">fun</span> _ -&gt; nt));
+            check_and_upd_lctxt3=(<span class="kw">fun</span> nt -&gt; memo_check_and_upd_lctxt tbl nt); 
+            unique3=(<span class="kw">fun</span> p i -&gt; unique (p i));
+          } <span class="kw">in</span>
+          (<span class="kw">fun</span> g sym i -&gt; g2p ps g sym i)
+        <span class="kw">in</span>
+        <span class="kw">let</span> p = 
+          <span class="kw">if</span> args.memo <span class="kw">then</span> 
+            memo_grammar_to_parser tbl term_to_parser g start_sym 
+          <span class="kw">else</span>
+            failwith <span class="st">&quot;Cannot use -alg cf with -memo false&quot;</span>
+        <span class="kw">in</span>
+        <span class="kw">let</span> _ = p (toinput (full txt)) <span class="kw">in</span>
+        <span class="kw">let</span> _ = (<span class="kw">match</span> args.output <span class="kw">with</span> | <span class="kw">false</span> -&gt; () | <span class="kw">true</span> -&gt; 
+          <span class="kw">let</span> cfs = compact_form_of_tbl tbl <span class="kw">in</span>
+          <span class="kw">let</span> _ = print_string(<span class="st">&quot;Length of cfs: &quot;</span>^(string_of_int (List<span class="kw">.</span>length cfs))^<span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span>) <span class="kw">in</span>
+          <span class="kw">let</span> string_of_cf (nt,(l,h)) = <span class="st">&quot;(&quot;</span>^nt^<span class="st">&quot;,&quot;</span>^(string_of_int l)^<span class="st">&quot;,&quot;</span>^(string_of_int h)^<span class="st">&quot;)&quot;</span> <span class="kw">in</span>
+          <span class="kw">let</span> _ = List<span class="kw">.</span>map (<span class="kw">fun</span> cf -&gt; print_string ((string_of_cf cf)^<span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span>)) cfs <span class="kw">in</span>
+          ())
+        <span class="kw">in</span>
+        ())
+      | <span class="st">&quot;pt&quot;</span> -&gt; (
+        <span class="kw">let</span> tbl = Hashtbl<span class="kw">.</span>create 100 <span class="kw">in</span>
+        <span class="kw">let</span> memo_grammar_to_parser tbl p_of_tm = 
+          <span class="kw">let</span> ps = {
+            p_of_tm3=(<span class="kw">fun</span> tm -&gt; (p_of_tm tm) &gt;&gt; (<span class="kw">fun</span> v -&gt; <span class="dt">LF</span>(tm,v)));
+            then_list3=(<span class="kw">fun</span> nt -&gt; <span class="kw">fun</span> alt -&gt; then_list2 nt alt);
+            check_and_upd_lctxt3=(<span class="kw">fun</span> nt -&gt; memo_check_and_upd_lctxt tbl nt); 
+            unique3=(<span class="kw">fun</span> p i -&gt; p i);
+          } <span class="kw">in</span>
+          (<span class="kw">fun</span> g sym i -&gt; g2p ps g sym i)
+        <span class="kw">in</span>
+        <span class="kw">let</span> p = 
+          <span class="kw">if</span> args.memo <span class="kw">then</span> 
+            memo_grammar_to_parser tbl term_to_parser g start_sym 
+          <span class="kw">else</span>
+            grammar_to_parser term_to_parser g start_sym          
+        <span class="kw">in</span>
+        <span class="kw">let</span> pts = p (toinput (full txt)) <span class="kw">in</span>
+        <span class="kw">let</span> _ = (<span class="kw">match</span> args.output <span class="kw">with</span> | <span class="kw">false</span> -&gt; () | <span class="kw">true</span> -&gt; 
+          print_string(<span class="st">&quot;Length of pts: &quot;</span>^(string_of_int (List<span class="kw">.</span>length pts))^<span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span>))
+        <span class="kw">in</span>
+        ())
+      | <span class="st">&quot;simp&quot;</span> -&gt; (
+        <span class="kw">let</span> tbl = Hashtbl<span class="kw">.</span>create 100 <span class="kw">in</span>
+        <span class="co">(* this version discards the context *)</span>
+        <span class="kw">let</span> memo_check_and_upd_lctxt tbl nt p i = 
+          <span class="kw">let</span> i = { i <span class="kw">with</span> lc1=[] } <span class="kw">in</span>
+          <span class="co">(* first look in the global memo table *)</span>
+          <span class="kw">let</span> k = (nt,i.lc1,lc_substring_of i.sb1) <span class="kw">in</span>
+          <span class="kw">if</span> Hashtbl<span class="kw">.</span>mem tbl k <span class="kw">then</span> Hashtbl<span class="kw">.</span>find tbl k <span class="kw">else</span> 
+            <span class="co">(* if not already present then proceed as normal, but remember the value *)</span>
+            <span class="kw">let</span> v = p i <span class="kw">in</span>
+            <span class="kw">let</span> _ = Hashtbl<span class="kw">.</span>add tbl k v <span class="kw">in</span>
+            v
+        <span class="kw">in</span>
+        <span class="kw">let</span> memo_grammar_to_parser tbl p_of_tm = 
+          <span class="kw">let</span> ps = {
+            p_of_tm3=(<span class="kw">fun</span> tm -&gt; (p_of_tm tm) &gt;&gt; (<span class="kw">fun</span> _ -&gt; tm));
+            then_list3=(<span class="kw">fun</span> nt -&gt; <span class="kw">fun</span> alt -&gt; then_list alt &gt;&gt; (<span class="kw">fun</span> _ -&gt; nt));
+            check_and_upd_lctxt3=(<span class="kw">fun</span> nt -&gt; memo_check_and_upd_lctxt tbl nt); 
+            unique3=(<span class="kw">fun</span> p i -&gt; unique (p i));
+          } <span class="kw">in</span>
+          (<span class="kw">fun</span> g sym i -&gt; g2p ps g sym i)
+        <span class="kw">in</span>
+        <span class="kw">let</span> p = 
+          <span class="kw">if</span> args.memo <span class="kw">then</span> 
+            memo_grammar_to_parser tbl term_to_parser g start_sym 
+          <span class="kw">else</span>
+            failwith <span class="st">&quot;Cannot use -alg simp with -memo false&quot;</span>
+        <span class="kw">in</span>
+        <span class="kw">let</span> _ = p (toinput (full txt)) <span class="kw">in</span>
+        <span class="kw">let</span> _ = (<span class="kw">match</span> args.output <span class="kw">with</span> | <span class="kw">false</span> -&gt; () | <span class="kw">true</span> -&gt; 
+          <span class="kw">let</span> cfs = compact_form_of_tbl tbl <span class="kw">in</span>
+          <span class="kw">let</span> _ = print_string(<span class="st">&quot;Length of cfs: &quot;</span>^(string_of_int (List<span class="kw">.</span>length cfs))^<span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span>) <span class="kw">in</span>
+          <span class="kw">let</span> string_of_cf (nt,(l,h)) = <span class="st">&quot;(&quot;</span>^nt^<span class="st">&quot;,&quot;</span>^(string_of_int l)^<span class="st">&quot;,&quot;</span>^(string_of_int h)^<span class="st">&quot;)&quot;</span> <span class="kw">in</span>
+          <span class="kw">let</span> _ = List<span class="kw">.</span>map (<span class="kw">fun</span> cf -&gt; print_string ((string_of_cf cf)^<span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span>)) cfs <span class="kw">in</span>
+          ())
+        <span class="kw">in</span>
+        ())
+      | _ -&gt; (failwith (<span class="st">&quot;Unrecognized algorithm: &quot;</span>^args.alg)))
+
+;;</code></pre>
+<h2 id="main_gen---parser-generator"><a href="#TOC">main_gen - parser generator</a></h2>
+<p>The following is used for generating OCaml parser code from a parsed grammar file.</p>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml"><span class="kw">let</span> str_of_SYM sym = <span class="kw">match</span> sym <span class="kw">with</span> 
+  | <span class="dt">NT</span> nt -&gt; <span class="st">&quot;parse_&quot;</span>^nt
+  | <span class="dt">TM</span> tm -&gt; <span class="st">&quot;(term_to_parser </span><span class="ch">\&quot;</span><span class="st">&quot;</span>^(String<span class="kw">.</span>escaped tm)^<span class="st">&quot;</span><span class="ch">\&quot;</span><span class="st">)&quot;</span>
+
+<span class="kw">let</span> str_of_SYMS alt = <span class="st">&quot;(&quot;</span> ^ (String<span class="kw">.</span>concat <span class="st">&quot;**&gt;&quot;</span> (List<span class="kw">.</span>map str_of_SYM alt)) ^ <span class="st">&quot;)&quot;</span>
+
+<span class="kw">let</span> str_of_ACT act = act
+
+<span class="kw">let</span> str_of_SYMSACT (alt,act) = <span class="st">&quot;(&quot;</span>^ (str_of_SYMS alt) ^<span class="st">&quot; &gt;&gt; (&quot;</span>^ (str_of_ACT act) ^<span class="st">&quot;))&quot;</span>
+
+<span class="kw">let</span> str_of_RHS rhs = <span class="st">&quot;(&quot;</span>^ (String<span class="kw">.</span>concat <span class="st">&quot;|||&quot;</span> (List<span class="kw">.</span>map str_of_SYMSACT rhs)) ^<span class="st">&quot;)&quot;</span>
+
+<span class="kw">let</span> str_of_RULE (nt,rhs) = (str_of_SYM (<span class="dt">NT</span> nt))^<span class="st">&quot; = fun i -&gt; (memo_check_and_upd_lctxt tbl_&quot;</span>^nt^<span class="st">&quot; </span><span class="ch">\&quot;</span><span class="st">&quot;</span>^nt^<span class="st">&quot;</span><span class="ch">\&quot;</span><span class="st"> (fun i -&gt; unique (&quot;</span>^(str_of_RHS rhs)^<span class="st">&quot; i)) i)&quot;</span>
+
+<span class="kw">let</span> str_of_RULES rs = <span class="st">&quot;let rec &quot;</span>^(String<span class="kw">.</span>concat <span class="st">&quot;</span><span class="ch">\n\n</span><span class="st"> and &quot;</span> (List<span class="kw">.</span>map str_of_RULE rs))</code></pre>
+<p>The following command line args are accepted:</p>
+<ul>
+<li><p>-basedir DIRNAME (the directory containing the <code>pre.ml</code> and <code>post.ml</code> files)</p></li>
+<li><p>-g FILENAME (the grammar file)</p></li>
+</ul>
+<pre class="sourceCode ocaml"><code class="sourceCode ocaml">
+<span class="kw">let</span> main =
+  <span class="kw">let</span> ((header,g),_) = List<span class="kw">.</span>hd (parse_GRAMMAR_WITH_ACTIONS (toinput (full (read_file_as_string args.grammar)))) <span class="kw">in</span>
+  <span class="kw">let</span> (start_sym,_1) = (List<span class="kw">.</span>hd g) <span class="kw">in</span>
+  <span class="kw">let</span> start_sym = <span class="dt">NT</span> start_sym <span class="kw">in</span>
+  <span class="kw">let</span> tbls = List<span class="kw">.</span>map (<span class="kw">fun</span> nt -&gt; <span class="st">&quot;let tbl_&quot;</span>^nt^<span class="st">&quot; = Hashtbl.create 10&quot;</span>) 
+    (unique (List<span class="kw">.</span>map (<span class="kw">fun</span> (nt,_) -&gt; nt) g)) <span class="kw">in</span>
+  <span class="kw">let</span> tbls = String<span class="kw">.</span>concat <span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span> tbls <span class="kw">in</span>
+  <span class="kw">let</span> s = str_of_RULES g <span class="kw">in</span>
+  <span class="kw">let</span> s = s ^ <span class="st">&quot;</span><span class="ch">\n</span><span class="st">let parse_start = &quot;</span>^(str_of_SYM start_sym)^<span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span> <span class="kw">in</span>
+  <span class="kw">let</span> _ = print_string ((read_file_as_string (args.basedir^<span class="st">&quot;/pre.ml&quot;</span>))^<span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span>^header^<span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span>^tbls^<span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span>^s^(read_file_as_string (args.basedir^<span class="st">&quot;/post.ml&quot;</span>))) <span class="kw">in</span>
+  ()</code></pre>
+</body>
+</html>
